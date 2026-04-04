@@ -114,3 +114,17 @@ impl FromStr for HeerId {
         Self::from_i64(parsed)
     }
 }
+
+impl From<HeerId> for i64 {
+    fn from(id: HeerId) -> Self {
+        id.0
+    }
+}
+
+impl TryFrom<i64> for HeerId {
+    type Error = Error;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        Self::from_i64(value)
+    }
+}

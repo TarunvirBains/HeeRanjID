@@ -120,3 +120,17 @@ impl FromStr for RanjId {
         Self::from_uuid(uuid)
     }
 }
+
+impl From<RanjId> for Uuid {
+    fn from(id: RanjId) -> Self {
+        id.0
+    }
+}
+
+impl TryFrom<Uuid> for RanjId {
+    type Error = Error;
+
+    fn try_from(uuid: Uuid) -> Result<Self, Self::Error> {
+        Self::from_uuid(uuid)
+    }
+}
