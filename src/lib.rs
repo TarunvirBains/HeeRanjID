@@ -4,7 +4,7 @@ mod postgres;
 mod ranj;
 mod serde_helpers;
 
-pub use error::{Error, StartupError};
+pub use error::{Error, GenerateError, StartupError};
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use postgres::{
     FETCH_ACTIVE_NODE_SQL, FETCH_EPOCH_SQL, FETCH_NODE_SQL, GENERATE_HEERID_SQL,

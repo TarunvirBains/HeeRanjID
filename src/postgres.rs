@@ -121,53 +121,51 @@ where
 pub async fn generate_heerid(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
-) -> Result<crate::HeerId, sqlx::Error> {
+) -> Result<crate::HeerId, crate::GenerateError> {
     let raw: i64 = sqlx::query_scalar("SELECT generate_id($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
         .await?;
-    Ok(crate::HeerId::from_i64(raw).expect("database returned negative HeerId"))
+    crate::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId)
 }
 
 pub async fn generate_ranjid(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
-) -> Result<crate::RanjId, sqlx::Error> {
+) -> Result<crate::RanjId, crate::GenerateError> {
     let uuid: uuid::Uuid = sqlx::query_scalar("SELECT generate_ranjid($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
         .await?;
-    Ok(crate::RanjId::from_uuid(uuid).expect("database returned invalid RanjId UUID"))
+    crate::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId)
 }
 
 pub async fn generate_heerids(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
     count: i32,
-) -> Result<Vec<crate::HeerId>, sqlx::Error> {
+) -> Result<Vec<crate::HeerId>, crate::GenerateError> {
     let rows: Vec<i64> = sqlx::query_scalar("SELECT id FROM generate_ids($1, $2)")
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
         .await?;
-    Ok(rows
-        .into_iter()
-        .map(|raw| crate::HeerId::from_i64(raw).expect("database returned negative HeerId"))
-        .collect())
+    rows.into_iter()
+        .map(|raw| crate::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId))
+        .collect()
 }
 
 pub async fn generate_ranjids(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
     count: i32,
-) -> Result<Vec<crate::RanjId>, sqlx::Error> {
+) -> Result<Vec<crate::RanjId>, crate::GenerateError> {
     let rows: Vec<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM generate_ranjids($1, $2)")
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
         .await?;
-    Ok(rows
-        .into_iter()
-        .map(|uuid| crate::RanjId::from_uuid(uuid).expect("database returned invalid RanjId UUID"))
-        .collect())
+    rows.into_iter()
+        .map(|uuid| crate::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId))
+        .collect()
 }
