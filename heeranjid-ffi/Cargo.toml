@@ -12,5 +12,9 @@ crate-type = ["cdylib"]
 heeranjid = { path = "../heeranjid", default-features = false }
 uuid = "1"
 
+[features]
+default = []
+include-sql = []
+
 [build-dependencies]
 cbindgen = "0.28"
