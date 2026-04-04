@@ -3,6 +3,15 @@ use sqlx::Executor;
 use sqlx::FromRow;
 
 pub const SCHEMA_SQL: &str = include_str!("../sql/postgres/schema.sql");
+pub const SESSION_SQL: &str = include_str!("../sql/postgres/functions/session.sql");
+pub const GENERATE_HEERID_SQL: &str = include_str!("../sql/postgres/functions/generate_heerid.sql");
+pub const INSTALL_SQL: &str = concat!(
+    include_str!("../sql/postgres/schema.sql"),
+    "\n",
+    include_str!("../sql/postgres/functions/session.sql"),
+    "\n",
+    include_str!("../sql/postgres/functions/generate_heerid.sql"),
+);
 pub const FETCH_NODE_SQL: &str = include_str!("../sql/postgres/queries/fetch_node.sql");
 pub const FETCH_EPOCH_SQL: &str = include_str!("../sql/postgres/queries/fetch_epoch.sql");
 
@@ -34,7 +43,7 @@ pub async fn install_schema<'e, E>(executor: E) -> Result<(), sqlx::Error>
 where
     E: Executor<'e, Database = sqlx::Postgres>,
 {
-    sqlx::raw_sql(SCHEMA_SQL).execute(executor).await?;
+    sqlx::raw_sql(INSTALL_SQL).execute(executor).await?;
     Ok(())
 }
 

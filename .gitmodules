@@ -1,6 +1,6 @@
 [submodule "scripts"]
 	path = scripts
-	url = ../scripts
+	url = https://github.com/TarunvirBains/scripts
 [submodule "sql"]
 	path = sql
-	url = ../sql
+	url = https://github.com/TarunvirBains/heeranjid-sql

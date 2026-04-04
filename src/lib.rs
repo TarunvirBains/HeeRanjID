@@ -7,8 +7,8 @@ mod serde_helpers;
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use postgres::{
-    FETCH_EPOCH_SQL, FETCH_NODE_SQL, HeerConfig, HeerNode, SCHEMA_SQL, fetch_epoch, fetch_node,
-    install_schema, validate_heer_node_id,
+    FETCH_EPOCH_SQL, FETCH_NODE_SQL, GENERATE_HEERID_SQL, HeerConfig, HeerNode, INSTALL_SQL,
+    SCHEMA_SQL, SESSION_SQL, fetch_epoch, fetch_node, install_schema, validate_heer_node_id,
 };
 pub use ranj::{
     RANJ_NODE_ID_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts,
