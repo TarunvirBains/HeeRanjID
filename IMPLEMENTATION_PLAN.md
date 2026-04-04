@@ -104,14 +104,14 @@ commit when practical.
 5. ~~Keep raw SQL ownership in the `sql` submodule rather than embedding logic in
    Rust strings.~~
 
-## Phase 7: Thorough Testing (partial)
+## Phase 7: Thorough Testing ✓
 
 1. ~~Expand unit coverage for bit packing and unpacking edge cases.~~
 2. ~~Expand integration coverage for all SQL functions.~~
-3. Add concurrency tests against real Postgres for:
-   - parallel `generate_id`
-   - parallel `generate_ids`
-   - state correctness under contention
+3. ~~Add concurrency tests against real Postgres for:~~
+   - ~~parallel `generate_id`~~
+   - ~~parallel `generate_ids`~~
+   - ~~state correctness under contention~~
 4. ~~Add rollback and overflow tests:~~
    - ~~minor rollback error~~
    - ~~major rollback error~~
@@ -120,21 +120,18 @@ commit when practical.
 5. ~~Add schema-install idempotency tests.~~
 6. ~~Add tests that validate ordering semantics directly in SQL with `ORDER BY`.~~
 
-## Phase 8: Documentation and Examples (partial)
+## Phase 8: Documentation and Examples ✓
 
-1. Update top-level [README.md](./README.md) to match the implemented API.
-2. Add usage examples for:
-   - installing schema
-   - setting session node
-   - generating single IDs
-   - generating batches
-   - using default column expressions
-3. Add a short Postgres bootstrap guide using
-   [scripts/postgres.sh](./scripts/postgres.sh).
+1. ~~Update top-level [README.md](./README.md) to match the implemented API.~~
+2. ~~Add usage examples for:~~
+   - ~~installing schema~~
+   - ~~setting session node~~
+   - ~~generating single IDs~~
+   - ~~generating batches~~
+   - ~~using default column expressions~~
+3. ~~Add a short Postgres bootstrap guide using
+   [scripts/postgres.sh](./scripts/postgres.sh).~~
 4. ~~Keep framework-specific guidance out of the SQL submodule docs.~~
-
-> The SQL submodule README has been updated with the full RanjId generation API
-> and file structure. The top-level README still needs Rust crate usage examples.
 
 ## Commit Strategy
 
@@ -154,46 +151,24 @@ When possible, keep each commit to:
 - one test slice proving it
 - under 7 files, unless a schema + test + wiring boundary needs slightly more
 
-## Remaining Work
+## Completion Notes
 
-### Phase 7: Concurrency tests
+All phases are complete. The following were resolved during implementation:
 
-These tests require multiple parallel Postgres connections and verify that the
-`FOR UPDATE` row lock in the generation functions works correctly:
+- ~~**Session node_id range:** Resolved. Added `set_heer_ranj_node_id()` and
+  `current_heer_ranj_node_id()` for the full 0-65535 RanjId node range.~~
+- ~~**BIGINT timestamp cast:** Resolved. RanjId SQL uses NUMERIC
+  division/modulo for the full 2^90 range (~39.24 billion years at
+  nanosecond precision).~~
+- ~~**Extended epochs:** Resolved. Added `ranj_epoch_offset` column to
+  `heer_config` for epochs beyond TIMESTAMP range (e.g. the Big Bang).~~
 
-- spawn N tasks that each call `generate_id(node_id)` in parallel
-- spawn N tasks that each call `generate_ids(node_id, count)` in parallel
-- collect all returned IDs and verify uniqueness and correct count
-- verify `heer_node_state` is consistent after contention
+### Design Decision: Seed SQL omits epoch
 
-The same tests should be repeated for `generate_ranjid` and
-`generate_ranjids`.
-
-### Phase 8: Top-level README
-
-The top-level [README.md](./README.md) is still the spec document. It needs:
-
-- a Rust crate usage section with `Cargo.toml` dependency and code examples
-- examples for `install_schema`, `seed_default_node`, `validate_startup`
-- examples for `generate_heerid`, `generate_ranjid`, `generate_heerids`
-- a Postgres bootstrap guide using `./scripts/postgres.sh up`
-- a note on the `check.sh` lint script
-
-### Known Limitations (from code review)
-
-1. **Session node_id range:** `set_heer_node_id()` validates 0-511 (HeerId's
-   9-bit range). Session-based `generate_ranjids(count)` calls go through this
-   function, limiting session-based RanjId to HeerId's node range. Direct-node
-   `generate_ranjids(node_id, count)` supports the full 0-65535 range.
-   A `set_heer_ranj_node_id()` function could lift this for session-based use.
-
-2. ~~**BIGINT timestamp cast:** Resolved. The RanjId SQL now uses NUMERIC
-   division/modulo for timestamp decomposition, supporting the full 2^90
-   range (~39.24 billion years at nanosecond precision).~~
-
-3. **Seed SQL omits epoch:** `seed.sql` inserts a default node but does not
-   set an epoch in `heer_config`. The epoch must be configured separately by
-   the deploying application.
+`seed.sql` inserts a default node but intentionally does not set an epoch in
+`heer_config`. The epoch is a deployment-specific decision (e.g. application
+launch date, Unix epoch, or the Big Bang) and should be configured explicitly
+by the deploying application.
 
 ## Definition of Done
 
