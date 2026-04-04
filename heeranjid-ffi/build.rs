@@ -18,7 +18,10 @@ fn main() {
                 .expect("Failed to copy SQL files to output directory");
             println!("cargo:warning=SQL files copied to {}", sql_dest.display());
         } else {
-            panic!("include-sql feature enabled but sql/ submodule not found at {}", sql_src.display());
+            panic!(
+                "include-sql feature enabled but sql/ submodule not found at {}",
+                sql_src.display()
+            );
         }
     }
 

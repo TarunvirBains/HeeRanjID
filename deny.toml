@@ -13,6 +13,8 @@ allow = [
     "Zlib",
     "MIT-0",
     "CDLA-Permissive-2.0",
+    "MPL-2.0",
+    "Apache-2.0 WITH LLVM-exception",
 ]
 
 [[licenses.clarify]]
