@@ -1,0 +1,16 @@
+[package]
+name = "heeranjid-ffi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+heeranjid = { path = "../heeranjid", default-features = false }
+uuid = "1"
+
+[build-dependencies]
+cbindgen = "0.28"

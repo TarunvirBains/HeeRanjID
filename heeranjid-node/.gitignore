@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.node
+# NAPI-RS generated files
+index.js
+index.d.ts

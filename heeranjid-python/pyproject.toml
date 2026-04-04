@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "heeranjid"
+version = "0.1.0"
+description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit UUIDv7)"
+requires-python = ">=3.10"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.2",
+]
+
+[project.optional-dependencies]
+django = ["django>=4.2"]
+dev = ["pytest>=8.0", "maturin>=1.0"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "heeranjid._heeranjid"
+features = ["pyo3/extension-module"]

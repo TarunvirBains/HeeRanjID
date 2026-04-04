@@ -1,2 +1,5 @@
 /target
 Cargo.lock
+heeranjid-ffi/heeranjid.h
+.claude/
+.codex

@@ -1,5 +1,5 @@
 [workspace]
-members = ["heeranjid"]
+members = ["heeranjid", "heeranjid-python", "heeranjid-node", "heeranjid-ffi"]
 resolver = "2"
 
 [workspace.package]
