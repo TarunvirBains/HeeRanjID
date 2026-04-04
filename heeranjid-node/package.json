@@ -14,8 +14,11 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
+    "prepack": "cp -r ../sql ./sql",
+    "postpack": "rm -rf ./sql",
     "test": "vitest run"
   },
+  "files": ["dist/", "js/", "sql/", "index.js", "index.d.ts"],
   "devDependencies": {
     "@napi-rs/cli": "^2",
     "vitest": "^2",
