@@ -3,66 +3,63 @@ using System.Reflection;
 namespace HeeRanjID;
 
 /// <summary>
-/// Provides access to the embedded SQL migration scripts.
+/// Provides access to the SQL migration scripts.
+/// Reads from a sql/ directory alongside the assembly.
 /// </summary>
 public static class SqlHelper
 {
-    private static readonly Assembly ThisAssembly = typeof(SqlHelper).Assembly;
+    private static string? _sqlBasePath;
 
     /// <summary>
-    /// Returns the full install SQL (schema + all functions) for Postgres,
-    /// concatenated into a single script ready for execution.
+    /// Sets the base path where SQL files are located.
+    /// If not set, defaults to a sql/ directory alongside the assembly.
     /// </summary>
-    public static string GetInstallSql()
-        => string.Join("\n",
-            GetSchemaSql(),
-            GetSessionSql(),
-            GetGenerateHeerIdSql(),
-            GetGenerateRanjIdSql());
-
-    /// <summary>
-    /// Returns the schema-only SQL for Postgres.
-    /// </summary>
-    public static string GetSchemaSql()
-        => ReadResource("HeeRanjID.Sql.postgres.schema.sql");
-
-    /// <summary>
-    /// Returns the seed SQL for Postgres.
-    /// </summary>
-    public static string GetSeedSql()
-        => ReadResource("HeeRanjID.Sql.postgres.seed.sql");
-
-    /// <summary>
-    /// Returns the generate_heerid function SQL.
-    /// </summary>
-    public static string GetGenerateHeerIdSql()
-        => ReadResource("HeeRanjID.Sql.postgres.functions.generate_heerid.sql");
-
-    /// <summary>
-    /// Returns the generate_ranjid function SQL.
-    /// </summary>
-    public static string GetGenerateRanjIdSql()
-        => ReadResource("HeeRanjID.Sql.postgres.functions.generate_ranjid.sql");
-
-    /// <summary>
-    /// Returns the session function SQL.
-    /// </summary>
-    public static string GetSessionSql()
-        => ReadResource("HeeRanjID.Sql.postgres.functions.session.sql");
-
-    /// <summary>
-    /// Returns all available SQL resource names.
-    /// </summary>
-    public static string[] GetResourceNames()
-        => ThisAssembly.GetManifestResourceNames()
-            .Where(n => n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-    private static string ReadResource(string name)
+    public static string SqlBasePath
     {
-        using var stream = ThisAssembly.GetManifestResourceStream(name)
-            ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        get => _sqlBasePath ?? Path.Combine(
+            Path.GetDirectoryName(typeof(SqlHelper).Assembly.Location)!,
+            "sql");
+        set => _sqlBasePath = value;
+    }
+
+    public static string GetInstallSql(string backend = "postgres")
+        => string.Join("\n",
+            GetSchemaSql(backend),
+            GetSessionSql(backend),
+            GetGenerateHeerIdSql(backend),
+            GetGenerateRanjIdSql(backend));
+
+    public static string GetSchemaSql(string backend = "postgres")
+        => ReadFile(backend, "schema.sql");
+
+    public static string GetSeedSql(string backend = "postgres")
+        => ReadFile(backend, "seed.sql");
+
+    public static string GetGenerateHeerIdSql(string backend = "postgres")
+    {
+        var subdir = backend == "mssql" ? "procedures" : "functions";
+        return ReadFile(backend, Path.Combine(subdir, "generate_heerid.sql"));
+    }
+
+    public static string GetGenerateRanjIdSql(string backend = "postgres")
+    {
+        var subdir = backend == "mssql" ? "procedures" : "functions";
+        return ReadFile(backend, Path.Combine(subdir, "generate_ranjid.sql"));
+    }
+
+    public static string GetSessionSql(string backend = "postgres")
+    {
+        var subdir = backend == "mssql" ? "procedures" : "functions";
+        return ReadFile(backend, Path.Combine(subdir, "session.sql"));
+    }
+
+    private static string ReadFile(string backend, string relativePath)
+    {
+        var path = Path.Combine(SqlBasePath, backend, relativePath);
+        if (!File.Exists(path))
+            throw new FileNotFoundException(
+                $"SQL file not found: {path}. Ensure SQL files are available " +
+                $"(build with IncludeSql=true or provide sql/ directory).", path);
+        return File.ReadAllText(path);
     }
 }
