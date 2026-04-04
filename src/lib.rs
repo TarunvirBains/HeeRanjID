@@ -95,7 +95,12 @@ mod tests {
 
     #[test]
     fn heerid_accepts_max_field_values() {
-        let id = HeerId::new(HeerId::MAX_TIMESTAMP_MS, HeerId::MAX_NODE_ID, HeerId::MAX_SEQUENCE).unwrap();
+        let id = HeerId::new(
+            HeerId::MAX_TIMESTAMP_MS,
+            HeerId::MAX_NODE_ID,
+            HeerId::MAX_SEQUENCE,
+        )
+        .unwrap();
         let parts = id.into_parts();
         assert_eq!(parts.timestamp_ms, HeerId::MAX_TIMESTAMP_MS);
         assert_eq!(parts.node_id, HeerId::MAX_NODE_ID);
@@ -154,7 +159,12 @@ mod tests {
 
     #[test]
     fn ranjid_accepts_max_field_values() {
-        let id = RanjId::new(RanjId::MAX_TIMESTAMP_MICROS, RanjId::MAX_NODE_ID, RanjId::MAX_SEQUENCE).unwrap();
+        let id = RanjId::new(
+            RanjId::MAX_TIMESTAMP_MICROS,
+            RanjId::MAX_NODE_ID,
+            RanjId::MAX_SEQUENCE,
+        )
+        .unwrap();
         let parts = id.into_parts();
         assert_eq!(parts.timestamp_micros, RanjId::MAX_TIMESTAMP_MICROS);
         assert_eq!(parts.node_id, RanjId::MAX_NODE_ID);
