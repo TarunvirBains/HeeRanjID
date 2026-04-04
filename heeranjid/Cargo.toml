@@ -4,27 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[features]
-default = ["postgres"]
-postgres = ["dep:sqlx"]
-
 [dependencies]
 serde.workspace = true
-sqlx = { workspace = true, optional = true }
 thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-tokio.workspace = true
-# sqlx is also listed here (unconditionally) so integration tests always have it,
-# even though it's optional in [dependencies] behind the "postgres" feature.
-sqlx.workspace = true
-
-[[test]]
-name = "postgres"
-required-features = ["postgres"]
-
-[[test]]
-name = "concurrency"
-required-features = ["postgres"]

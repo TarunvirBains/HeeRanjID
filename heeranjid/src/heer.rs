@@ -20,8 +20,6 @@ pub struct HeerIdParts {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "postgres", derive(sqlx::Type))]
-#[cfg_attr(feature = "postgres", sqlx(transparent))]
 pub struct HeerId(
     #[serde(
         serialize_with = "serde_helpers::serialize_display",

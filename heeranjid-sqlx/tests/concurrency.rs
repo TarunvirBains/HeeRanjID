@@ -38,7 +38,7 @@ async fn setup_pool(schema: &str) -> Option<PgPool> {
 
     let install_sql = format!(
         r#"SET search_path TO "{schema}"; {}"#,
-        heeranjid::INSTALL_SQL
+        heeranjid_sqlx::INSTALL_SQL
     );
     sqlx::raw_sql(&install_sql).execute(&pool).await.unwrap();
 

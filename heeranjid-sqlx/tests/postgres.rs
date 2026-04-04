@@ -1,5 +1,6 @@
-use heeranjid::{
-    RanjId, fetch_epoch, fetch_node, install_schema, seed_default_node, validate_epoch,
+use heeranjid::RanjId;
+use heeranjid_sqlx::{
+    fetch_epoch, fetch_node, install_schema, seed_default_node, validate_epoch,
     validate_heer_node_id, validate_startup,
 };
 use sqlx::{Connection, Executor, PgConnection};
@@ -471,11 +472,13 @@ async fn ranjid_rust_helper_generates_valid_id() {
     .await
     .unwrap();
 
-    let ranj = heeranjid::generate_ranjid(&mut conn, 1).await.unwrap();
+    let ranj = heeranjid_sqlx::generate_ranjid(&mut conn, 1).await.unwrap();
     assert_eq!(ranj.node_id(), 1);
     assert!(ranj.timestamp_micros() > 0);
 
-    let batch = heeranjid::generate_ranjids(&mut conn, 1, 5).await.unwrap();
+    let batch = heeranjid_sqlx::generate_ranjids(&mut conn, 1, 5)
+        .await
+        .unwrap();
     assert_eq!(batch.len(), 5);
     assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
 }
@@ -671,11 +674,13 @@ async fn heerid_rust_helper_generates_valid_id() {
     .await
     .unwrap();
 
-    let heer = heeranjid::generate_heerid(&mut conn, 1).await.unwrap();
+    let heer = heeranjid_sqlx::generate_heerid(&mut conn, 1).await.unwrap();
     assert_eq!(heer.node_id(), 1);
     assert!(heer.timestamp_ms() > 0);
 
-    let batch = heeranjid::generate_heerids(&mut conn, 1, 5).await.unwrap();
+    let batch = heeranjid_sqlx::generate_heerids(&mut conn, 1, 5)
+        .await
+        .unwrap();
     assert_eq!(batch.len(), 5);
     assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
 }

@@ -1,4 +1,4 @@
-use crate::Error;
+use heeranjid::Error;
 use sqlx::Executor;
 use sqlx::FromRow;
 
@@ -37,10 +37,10 @@ pub struct HeerConfig {
 }
 
 pub fn validate_heer_node_id(node_id: i32) -> Result<u16, Error> {
-    if !(0..=i32::from(crate::heer::HeerId::MAX_NODE_ID)).contains(&node_id) {
+    if !(0..=i32::from(heeranjid::HeerId::MAX_NODE_ID)).contains(&node_id) {
         return Err(Error::NodeIdOutOfRange {
             value: node_id.max(0) as u32,
-            bits: crate::heer::HEER_NODE_ID_BITS,
+            bits: heeranjid::HEER_NODE_ID_BITS,
         });
     }
 
@@ -123,37 +123,37 @@ where
 pub async fn generate_heerid(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
-) -> Result<crate::HeerId, crate::GenerateError> {
+) -> Result<heeranjid::HeerId, crate::GenerateError> {
     let raw: i64 = sqlx::query_scalar("SELECT generate_id($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
         .await?;
-    crate::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId)
+    heeranjid::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId)
 }
 
 pub async fn generate_ranjid(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
-) -> Result<crate::RanjId, crate::GenerateError> {
+) -> Result<heeranjid::RanjId, crate::GenerateError> {
     let uuid: uuid::Uuid = sqlx::query_scalar("SELECT generate_ranjid($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
         .await?;
-    crate::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId)
+    heeranjid::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId)
 }
 
 pub async fn generate_heerids(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
     count: i32,
-) -> Result<Vec<crate::HeerId>, crate::GenerateError> {
+) -> Result<Vec<heeranjid::HeerId>, crate::GenerateError> {
     let rows: Vec<i64> = sqlx::query_scalar("SELECT id FROM generate_ids($1, $2)")
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
         .await?;
     rows.into_iter()
-        .map(|raw| crate::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId))
+        .map(|raw| heeranjid::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId))
         .collect()
 }
 
@@ -172,13 +172,13 @@ pub async fn generate_ranjids(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
     count: i32,
-) -> Result<Vec<crate::RanjId>, crate::GenerateError> {
+) -> Result<Vec<heeranjid::RanjId>, crate::GenerateError> {
     let rows: Vec<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM generate_ranjids($1, $2)")
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
         .await?;
     rows.into_iter()
-        .map(|uuid| crate::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId))
+        .map(|uuid| heeranjid::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId))
         .collect()
 }

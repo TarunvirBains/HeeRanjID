@@ -63,9 +63,6 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace -- -D warnings
 
-      - name: cargo check (no-default-features)
-        run: cargo check -p heeranjid --no-default-features
-
       - name: cargo deny check
         run: cargo deny check
 
@@ -73,11 +70,11 @@ jobs:
         run: cargo test -p heeranjid --lib
 
       - name: cargo test (integration)
-        run: cargo test -p heeranjid --test postgres
+        run: cargo test -p heeranjid-sqlx --test postgres
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 
       - name: cargo test (concurrency)
-        run: cargo test -p heeranjid --test concurrency
+        run: cargo test -p heeranjid-sqlx --test concurrency
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
