@@ -821,3 +821,126 @@ async fn schema_install_is_idempotent() {
     let node = fetch_node(&mut conn, 1).await.unwrap().unwrap();
     assert_eq!(node.name, "default");
 }
+
+#[tokio::test]
+async fn heerid_works_as_column_default() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    conn.execute(
+        r#"CREATE TABLE test_entities (
+            id BIGINT PRIMARY KEY DEFAULT generate_id(),
+            label TEXT NOT NULL
+        )"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(r#"INSERT INTO test_entities (label) VALUES ('alpha')"#)
+        .await
+        .unwrap();
+    conn.execute(r#"INSERT INTO test_entities (label) VALUES ('bravo')"#)
+        .await
+        .unwrap();
+
+    let rows: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, label FROM test_entities ORDER BY id")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].0 > 0);
+    assert!(rows[0].0 < rows[1].0);
+}
+
+#[tokio::test]
+async fn ranjid_works_as_column_default() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    conn.execute(
+        r#"CREATE TABLE test_events (
+            id UUID PRIMARY KEY DEFAULT generate_ranjid(),
+            label TEXT NOT NULL
+        )"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(r#"INSERT INTO test_events (label) VALUES ('alpha')"#)
+        .await
+        .unwrap();
+    conn.execute(r#"INSERT INTO test_events (label) VALUES ('bravo')"#)
+        .await
+        .unwrap();
+
+    let rows: Vec<(uuid::Uuid, String)> =
+        sqlx::query_as("SELECT id, label FROM test_events ORDER BY id")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    RanjId::from_uuid(rows[0].0).unwrap();
+    RanjId::from_uuid(rows[1].0).unwrap();
+    assert!(rows[0].0 < rows[1].0);
+}
