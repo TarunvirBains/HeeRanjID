@@ -20,7 +20,9 @@ pub struct HeerIdParts {
     pub sequence: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Type, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Type, Serialize, Deserialize,
+)]
 #[sqlx(transparent)]
 pub struct HeerId(
     #[serde(
