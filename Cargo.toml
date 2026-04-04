@@ -1,3 +1,16 @@
 [workspace]
 members = ["heeranjid"]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+uuid = { version = "1", features = ["serde"] }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "uuid", "runtime-tokio-rustls", "macros", "time"] }
+serde_json = "1"
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
