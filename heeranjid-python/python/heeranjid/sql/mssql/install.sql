@@ -1,1 +1,0 @@
-../../../../../sql/mssql/install.sql

@@ -1,0 +1,2 @@
+# SQL files are copied from submodule at build time, not stored in repo
+*.sql

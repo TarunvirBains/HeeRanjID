@@ -1,1 +1,0 @@
-../../../../../sql/postgres/functions/generate_ranjid.sql

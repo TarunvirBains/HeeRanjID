@@ -1,1 +1,0 @@
-../../../../../sql/mssql/seed.sql

@@ -1,1 +1,0 @@
-../../../../../sql/postgres/install.sql

@@ -1,1 +1,0 @@
-../../../../../sql/postgres/functions/session.sql
