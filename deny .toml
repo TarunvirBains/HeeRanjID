@@ -1,0 +1,26 @@
+[licenses]
+private = { ignore = true }
+# Explicitly allow standard permissive licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "Unlicense",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "BSL-1.0",
+    "Zlib",
+    "MIT-0",
+    "CDLA-Permissive-2.0",
+]
+
+[[licenses.clarify]]
+name = "ring"
+version = "*"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd06ff33 }]
+
+[advisories]
+unmaintained = "transitive" # Check transitive dependencies
+yanked = "deny"       # Deny yanked crates
