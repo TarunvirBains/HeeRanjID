@@ -1,4 +1,5 @@
 use crate::Error;
+use sqlx::Executor;
 use sqlx::FromRow;
 
 pub const SCHEMA_SQL: &str = include_str!("../sql/postgres/schema.sql");
@@ -29,21 +30,29 @@ pub fn validate_heer_node_id(node_id: i32) -> Result<u16, Error> {
     Ok(node_id as u16)
 }
 
+pub async fn install_schema<'e, E>(executor: E) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::raw_sql(SCHEMA_SQL).execute(executor).await?;
+    Ok(())
+}
+
 pub async fn fetch_node(
-    pool: &sqlx::PgPool,
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
 ) -> Result<Option<HeerNode>, sqlx::Error> {
     sqlx::query_as::<_, HeerNode>(FETCH_NODE_SQL)
-    .bind(i32::from(node_id))
-    .fetch_optional(pool)
-    .await
+        .bind(i32::from(node_id))
+        .fetch_optional(executor)
+        .await
 }
 
 pub async fn fetch_epoch(
-    pool: &sqlx::PgPool,
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
 ) -> Result<Option<sqlx::types::time::PrimitiveDateTime>, sqlx::Error> {
     let record = sqlx::query_as::<_, HeerConfig>(FETCH_EPOCH_SQL)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await?;
 
     Ok(record.map(|row| row.epoch))
