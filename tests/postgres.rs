@@ -479,3 +479,203 @@ async fn ranjid_rust_helper_generates_valid_id() {
     assert_eq!(batch.len(), 5);
     assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
 }
+
+#[tokio::test]
+async fn heerid_sql_non_spanning_rejects_overflow() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Request more IDs than fit in one millisecond with spanning disabled
+    let err = sqlx::query_scalar::<_, i64>("SELECT id FROM generate_ids($1, $2, $3)")
+        .bind(1_i32)
+        .bind(8193_i32)
+        .bind(false)
+        .fetch_all(&mut conn)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("requested"));
+}
+
+#[tokio::test]
+async fn heerid_sql_spanning_handles_overflow() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Set state so only a few sequences remain
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id, last_id_time, last_sequence)
+           SELECT 1,
+                  FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+                  - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT,
+                  8190"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    let batch: Vec<i64> = sqlx::query_scalar("SELECT id FROM generate_ids(5)")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+
+    assert_eq!(batch.len(), 5);
+    assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[tokio::test]
+async fn heerid_sql_rejects_missing_epoch() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+
+    let err = sqlx::query_scalar::<_, i64>("SELECT generate_id($1)")
+        .bind(1_i32)
+        .fetch_one(&mut conn)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("heer_config"));
+}
+
+#[tokio::test]
+async fn heerid_sql_rejects_missing_session_node() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Call generate_id() without setting session node first
+    let err = sqlx::query_scalar::<_, i64>("SELECT generate_id()")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("node_id"));
+}
+
+#[tokio::test]
+async fn heerid_rust_helper_generates_valid_id() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    let heer = heeranjid::generate_heerid(&mut conn, 1).await.unwrap();
+    assert_eq!(heer.node_id(), 1);
+    assert!(heer.timestamp_ms() > 0);
+
+    let batch = heeranjid::generate_heerids(&mut conn, 1, 5).await.unwrap();
+    assert_eq!(batch.len(), 5);
+    assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
+}
