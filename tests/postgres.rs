@@ -1,6 +1,6 @@
 use heeranjid::{
-    fetch_epoch, fetch_node, install_schema, seed_default_node, validate_epoch,
-    validate_heer_node_id, validate_startup, RanjId,
+    RanjId, fetch_epoch, fetch_node, install_schema, seed_default_node, validate_epoch,
+    validate_heer_node_id, validate_startup,
 };
 use sqlx::{Connection, Executor, PgConnection};
 
@@ -714,23 +714,18 @@ async fn heerid_sql_order_by_matches_generation_order() {
         .await
         .unwrap();
 
-    conn.execute(
-        r#"CREATE TEMP TABLE test_ids (pos SERIAL, hid BIGINT NOT NULL)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"CREATE TEMP TABLE test_ids (pos SERIAL, hid BIGINT NOT NULL)"#)
+        .await
+        .unwrap();
 
-    conn.execute(
-        r#"INSERT INTO test_ids (hid) SELECT id FROM generate_ids(20)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"INSERT INTO test_ids (hid) SELECT id FROM generate_ids(20)"#)
+        .await
+        .unwrap();
 
-    let ordered: Vec<(i32, i64)> =
-        sqlx::query_as("SELECT pos, hid FROM test_ids ORDER BY hid ASC")
-            .fetch_all(&mut conn)
-            .await
-            .unwrap();
+    let ordered: Vec<(i32, i64)> = sqlx::query_as("SELECT pos, hid FROM test_ids ORDER BY hid ASC")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
 
     for (i, (pos, _)) in ordered.iter().enumerate() {
         assert_eq!(*pos as usize, i + 1);
@@ -771,17 +766,13 @@ async fn ranjid_sql_order_by_matches_generation_order() {
         .await
         .unwrap();
 
-    conn.execute(
-        r#"CREATE TEMP TABLE test_rids (pos SERIAL, rid UUID NOT NULL)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"CREATE TEMP TABLE test_rids (pos SERIAL, rid UUID NOT NULL)"#)
+        .await
+        .unwrap();
 
-    conn.execute(
-        r#"INSERT INTO test_rids (rid) SELECT id FROM generate_ranjids(20)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"INSERT INTO test_rids (rid) SELECT id FROM generate_ranjids(20)"#)
+        .await
+        .unwrap();
 
     let ordered: Vec<(i32, uuid::Uuid)> =
         sqlx::query_as("SELECT pos, rid FROM test_rids ORDER BY rid ASC")
