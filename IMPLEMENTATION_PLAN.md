@@ -187,10 +187,9 @@ The top-level [README.md](./README.md) is still the spec document. It needs:
    `generate_ranjids(node_id, count)` supports the full 0-65535 range.
    A `set_heer_ranj_node_id()` function could lift this for session-based use.
 
-2. **BIGINT timestamp cast:** The RanjId SQL casts `NUMERIC(30,0)` to `BIGINT`
-   for bit shift operations. This limits the effective timestamp to ~292,000
-   years from epoch (BIGINT max) rather than the theoretical 2^90 range. No
-   practical deployment will hit this.
+2. ~~**BIGINT timestamp cast:** Resolved. The RanjId SQL now uses NUMERIC
+   division/modulo for timestamp decomposition, supporting the full 2^90
+   range (~39.24 billion years at nanosecond precision).~~
 
 3. **Seed SQL omits epoch:** `seed.sql` inserts a default node but does not
    set an epoch in `heer_config`. The epoch must be configured separately by
