@@ -1,0 +1,6 @@
+[submodule "scripts"]
+	path = scripts
+	url = ../scripts
+[submodule "sql"]
+	path = sql
+	url = ../sql
