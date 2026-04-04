@@ -1,6 +1,6 @@
 use heeranjid::{
     fetch_epoch, fetch_node, install_schema, seed_default_node, validate_epoch,
-    validate_heer_node_id, validate_startup,
+    validate_heer_node_id, validate_startup, RanjId,
 };
 use sqlx::{Connection, Executor, PgConnection};
 
@@ -303,4 +303,179 @@ async fn startup_validates_epoch() {
 
     let epoch = validate_epoch(&mut conn).await.unwrap();
     assert_eq!(epoch.to_string(), "2024-01-01 0:00:00.0");
+}
+
+#[tokio::test]
+async fn ranjid_sql_generates_valid_uuidv7() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    let uuid: uuid::Uuid = sqlx::query_scalar("SELECT generate_ranjid($1)")
+        .bind(1_i32)
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+
+    let ranj = RanjId::from_uuid(uuid).unwrap();
+    let parts = ranj.into_parts();
+    assert!(parts.timestamp_micros > 0);
+    assert_eq!(parts.node_id, 1);
+}
+
+#[tokio::test]
+async fn ranjid_sql_generates_monotonic_batch() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    let batch: Vec<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM generate_ranjids(10)")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+
+    assert_eq!(batch.len(), 10);
+
+    let ranj_ids: Vec<RanjId> = batch
+        .iter()
+        .map(|u| RanjId::from_uuid(*u).unwrap())
+        .collect();
+
+    // Must be strictly increasing
+    assert!(ranj_ids.windows(2).all(|pair| pair[0] < pair[1]));
+
+    // All should have node_id = 1
+    for r in &ranj_ids {
+        assert_eq!(r.node_id(), 1);
+    }
+}
+
+#[tokio::test]
+async fn ranjid_sql_rejects_clock_rollback() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0)"#,
+    )
+    .await
+    .unwrap();
+
+    let error = sqlx::query_scalar::<_, uuid::Uuid>("SELECT generate_ranjid($1)")
+        .bind(1_i32)
+        .fetch_one(&mut conn)
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("clock rollback"));
+}
+
+#[tokio::test]
+async fn ranjid_rust_helper_generates_valid_id() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    let ranj = heeranjid::generate_ranjid(&mut conn, 1).await.unwrap();
+    assert_eq!(ranj.node_id(), 1);
+    assert!(ranj.timestamp_micros() > 0);
+
+    let batch = heeranjid::generate_ranjids(&mut conn, 1, 5).await.unwrap();
+    assert_eq!(batch.len(), 5);
+    assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
 }
