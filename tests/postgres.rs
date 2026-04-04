@@ -373,7 +373,7 @@ async fn ranjid_sql_generates_monotonic_batch() {
     .await
     .unwrap();
 
-    sqlx::query("SELECT set_heer_node_id($1)")
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
         .bind(1_i32)
         .execute(&mut conn)
         .await
@@ -760,7 +760,7 @@ async fn ranjid_sql_order_by_matches_generation_order() {
     .await
     .unwrap();
 
-    sqlx::query("SELECT set_heer_node_id($1)")
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
         .bind(1_i32)
         .execute(&mut conn)
         .await
@@ -902,7 +902,7 @@ async fn ranjid_works_as_column_default() {
     .await
     .unwrap();
 
-    sqlx::query("SELECT set_heer_node_id($1)")
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
         .bind(1_i32)
         .execute(&mut conn)
         .await
@@ -1000,7 +1000,7 @@ async fn ranjid_big_bang_epoch_generates_valid_ids() {
 
     // Generate a batch and verify monotonic ordering still works
     // at these extreme timestamp values.
-    sqlx::query("SELECT set_heer_node_id($1)")
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
         .bind(1_i32)
         .execute(&mut conn)
         .await
@@ -1016,5 +1016,62 @@ async fn ranjid_big_bang_epoch_generates_valid_ids() {
         .iter()
         .map(|u| RanjId::from_uuid(*u).unwrap())
         .collect();
+    assert!(ranj_ids.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[tokio::test]
+async fn ranjid_session_supports_large_node_ids() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    // Register a node with ID beyond HeerId's 511 limit
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1000, 'large-node', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // set_heer_node_id would reject 1000, but set_heer_ranj_node_id accepts it
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
+        .bind(1000_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    let batch: Vec<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM generate_ranjids(5)")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+
+    assert_eq!(batch.len(), 5);
+
+    let ranj_ids: Vec<heeranjid::RanjId> = batch
+        .iter()
+        .map(|u| heeranjid::RanjId::from_uuid(*u).unwrap())
+        .collect();
+
+    // All should have node_id = 1000
+    for r in &ranj_ids {
+        assert_eq!(r.node_id(), 1000);
+    }
+
+    // Must be strictly increasing
     assert!(ranj_ids.windows(2).all(|pair| pair[0] < pair[1]));
 }

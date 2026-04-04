@@ -155,6 +155,17 @@ pub async fn generate_heerids(
         .collect()
 }
 
+pub async fn set_ranj_node_id(
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
+    node_id: u16,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT set_heer_ranj_node_id($1)")
+        .bind(i32::from(node_id))
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 pub async fn generate_ranjids(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     node_id: u16,
