@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/heeranjid
+
+jobs:
+  check:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1.94-slim-bullseye
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_DB: heeranjid
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cargo-deny
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends curl
+          curl -L https://github.com/EmbarkStudios/cargo-deny/releases/latest/download/cargo-deny-x86_64-unknown-linux-musl.tar.gz \
+            | tar xz -C /usr/local/bin --strip-components=1 --wildcards '*/cargo-deny'
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-
+
+      - name: cargo fmt --check
+        run: rustup component add rustfmt && cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy -- -D warnings
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: cargo test (unit)
+        run: cargo test --lib
+
+      - name: cargo test (integration)
+        run: cargo test --test postgres
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      - name: cargo test (concurrency)
+        run: cargo test --test concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
