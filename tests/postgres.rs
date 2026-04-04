@@ -793,3 +793,31 @@ async fn ranjid_sql_order_by_matches_generation_order() {
         assert_eq!(*pos as usize, i + 1);
     }
 }
+
+#[tokio::test]
+async fn schema_install_is_idempotent() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+
+    let node = fetch_node(&mut conn, 1).await.unwrap().unwrap();
+    assert_eq!(node.name, "default");
+}
