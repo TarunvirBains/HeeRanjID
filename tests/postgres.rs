@@ -679,3 +679,117 @@ async fn heerid_rust_helper_generates_valid_id() {
     assert_eq!(batch.len(), 5);
     assert!(batch.windows(2).all(|pair| pair[0] < pair[1]));
 }
+
+#[tokio::test]
+async fn heerid_sql_order_by_matches_generation_order() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    conn.execute(
+        r#"CREATE TEMP TABLE test_ids (pos SERIAL, hid BIGINT NOT NULL)"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(
+        r#"INSERT INTO test_ids (hid) SELECT id FROM generate_ids(20)"#,
+    )
+    .await
+    .unwrap();
+
+    let ordered: Vec<(i32, i64)> =
+        sqlx::query_as("SELECT pos, hid FROM test_ids ORDER BY hid ASC")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+
+    for (i, (pos, _)) in ordered.iter().enumerate() {
+        assert_eq!(*pos as usize, i + 1);
+    }
+}
+
+#[tokio::test]
+async fn ranjid_sql_order_by_matches_generation_order() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    conn.execute(
+        r#"CREATE TEMP TABLE test_rids (pos SERIAL, rid UUID NOT NULL)"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(
+        r#"INSERT INTO test_rids (rid) SELECT id FROM generate_ranjids(20)"#,
+    )
+    .await
+    .unwrap();
+
+    let ordered: Vec<(i32, uuid::Uuid)> =
+        sqlx::query_as("SELECT pos, rid FROM test_rids ORDER BY rid ASC")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+
+    for (i, (pos, _)) in ordered.iter().enumerate() {
+        assert_eq!(*pos as usize, i + 1);
+    }
+}
