@@ -21,7 +21,9 @@ pub struct RanjIdParts {
     pub sequence: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Type, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Type, Serialize, Deserialize,
+)]
 #[sqlx(transparent)]
 pub struct RanjId(
     #[serde(
@@ -115,6 +117,20 @@ impl FromStr for RanjId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let uuid = Uuid::parse_str(s).map_err(|_| Error::InvalidRanjIdString(s.to_owned()))?;
+        Self::from_uuid(uuid)
+    }
+}
+
+impl From<RanjId> for Uuid {
+    fn from(id: RanjId) -> Self {
+        id.0
+    }
+}
+
+impl TryFrom<Uuid> for RanjId {
+    type Error = Error;
+
+    fn try_from(uuid: Uuid) -> Result<Self, Self::Error> {
         Self::from_uuid(uuid)
     }
 }

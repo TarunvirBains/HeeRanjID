@@ -9,7 +9,7 @@
 - **Deterministic Sortability:** Database-native ordering for both variants.
 - **High write throughput:** 8196 and 65536 rows per node - most likely never your bottleneck
 - **Distributed System Compatibility:** Zero migration path from single-node to multi-node systems*
-- **Cross-Stack Compatibility:** Seamless use in **Rust (Axum)**, **Python (Django)**, and **C# (.NET)**.
+- **Cross-Stack Compatibility:** Seamless use in **Rust (Axum)**, **Python (Django)**, **JS (Prisma)** and **C# (.NET)**.
 
 
 ---
@@ -357,4 +357,128 @@ HeerId is a database-native ID system that scales without introducing complexity
 | **Node ID Bits** | 9 bits (512) | 16 bits (65,536) |
 | **Sequence Bits** | 13 bits (8,192/ms) | 16 bits (65,536/μs) |
 | **Max Lifespan** | ~69 Years | ~2.5 Trillion Years |
+
+---
+
+## Rust Crate Usage
+
+### Installation
+
+```toml
+[dependencies]
+heeranjid = { path = "." }
+```
+
+### Quick Start
+
+```rust
+use heeranjid::{
+    install_schema, seed_default_node, validate_startup, validate_epoch,
+    generate_heerid, generate_ranjid, generate_heerids, generate_ranjids,
+    HeerId, RanjId,
+};
+use sqlx::PgConnection;
+
+// 1. Install schema (idempotent)
+install_schema(&mut conn).await?;
+
+// 2. Seed default node (idempotent, inserts node_id=1)
+seed_default_node(&mut conn).await?;
+
+// 3. Validate on startup
+let node = validate_startup(&mut conn, 1).await?;
+let epoch = validate_epoch(&mut conn).await?;
+println!("Node {} ({}) ready, epoch: {}", node.node_id, node.name, epoch);
+
+// 4. Generate IDs
+let heer: HeerId = generate_heerid(&mut conn, 1).await?;
+let ranj: RanjId = generate_ranjid(&mut conn, 1).await?;
+
+// 5. Generate batches
+let heer_batch: Vec<HeerId> = generate_heerids(&mut conn, 1, 100).await?;
+let ranj_batch: Vec<RanjId> = generate_ranjids(&mut conn, 1, 100).await?;
+```
+
+### Session-Based Generation
+
+For connection-pooled applications, set the node once per connection:
+
+```sql
+-- HeerId sessions (node_id 0-511)
+SELECT set_heer_node_id(1);
+SELECT generate_id();
+SELECT id FROM generate_ids(10);
+
+-- RanjId sessions (node_id 0-65535)
+SELECT set_heer_ranj_node_id(1);
+SELECT generate_ranjid();
+SELECT id FROM generate_ranjids(10);
+```
+
+### Column Defaults
+
+```sql
+-- HeerId as primary key
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY DEFAULT generate_id(),
+    name TEXT NOT NULL
+);
+
+-- RanjId as primary key
+CREATE TABLE events (
+    id UUID PRIMARY KEY DEFAULT generate_ranjid(),
+    payload JSONB NOT NULL
+);
+```
+
+### ID Inspection
+
+```rust
+// HeerId parts
+let parts = heer.into_parts();
+println!("time={}ms node={} seq={}", parts.timestamp_ms, parts.node_id, parts.sequence);
+
+// RanjId parts
+let parts = ranj.into_parts();
+println!("time={}us node={} seq={}", parts.timestamp_micros, parts.node_id, parts.sequence);
+```
+
+### JSON Serialization
+
+Both types serialize as strings to prevent JavaScript precision loss:
+
+```json
+{ "heer_id": "1234567890123456", "ranj_id": "0192d4e0-7b3a-7f00-8001-000100000001" }
+```
+
+Deserialization accepts both strings and integers for HeerId.
+
+### Postgres Bootstrap
+
+```bash
+# Start a local Postgres instance
+./scripts/postgres.sh up
+
+# Set DATABASE_URL and run tests
+export DATABASE_URL=$(./scripts/postgres.sh url)
+cargo test
+
+# Lint and check
+./scripts/check.sh
+```
+
+### Extended Epochs (Big Bang)
+
+RanjId supports epochs beyond PostgreSQL's TIMESTAMP range via `ranj_epoch_offset`:
+
+```sql
+INSERT INTO heer_config (id, epoch, ranj_epoch_offset)
+VALUES (
+    1,
+    TIMESTAMP '1970-01-01 00:00:00',
+    FLOOR(13.787e9 * 365.25 * 86400 * 1e6)::NUMERIC(30,0)
+);
+```
+
+This encodes microseconds since the Big Bang (~4.35 x 10^23), well within the 90-bit timestamp range (~1.24 x 10^27).
 

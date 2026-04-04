@@ -4,15 +4,16 @@ mod postgres;
 mod ranj;
 mod serde_helpers;
 
-pub use error::Error;
+pub use error::{Error, GenerateError, StartupError};
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use postgres::{
-    FETCH_EPOCH_SQL, FETCH_NODE_SQL, GENERATE_HEERID_SQL, HeerConfig, HeerNode, INSTALL_SQL,
-    SCHEMA_SQL, SESSION_SQL, fetch_epoch, fetch_node, install_schema, validate_heer_node_id,
+    FETCH_ACTIVE_NODE_SQL, FETCH_EPOCH_SQL, FETCH_NODE_SQL, GENERATE_HEERID_SQL,
+    GENERATE_RANJID_SQL, HeerConfig, HeerNode, INSTALL_SQL, SCHEMA_SQL, SEED_SQL, SESSION_SQL,
+    fetch_active_node, fetch_epoch, fetch_node, generate_heerid, generate_heerids, generate_ranjid,
+    generate_ranjids, install_schema, seed_default_node, set_ranj_node_id, validate_epoch,
+    validate_heer_node_id, validate_startup,
 };
-pub use ranj::{
-    RANJ_NODE_ID_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts,
-};
+pub use ranj::{RANJ_NODE_ID_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts};
 
 #[cfg(test)]
 mod tests {
@@ -91,5 +92,138 @@ mod tests {
         let json = serde_json::to_string(&id).unwrap();
 
         assert_eq!(json, format!("\"{}\"", id.as_uuid()));
+    }
+
+    // ── HeerId boundary tests ──
+
+    #[test]
+    fn heerid_accepts_max_field_values() {
+        let id = HeerId::new(
+            HeerId::MAX_TIMESTAMP_MS,
+            HeerId::MAX_NODE_ID,
+            HeerId::MAX_SEQUENCE,
+        )
+        .unwrap();
+        let parts = id.into_parts();
+        assert_eq!(parts.timestamp_ms, HeerId::MAX_TIMESTAMP_MS);
+        assert_eq!(parts.node_id, HeerId::MAX_NODE_ID);
+        assert_eq!(parts.sequence, HeerId::MAX_SEQUENCE);
+    }
+
+    #[test]
+    fn heerid_rejects_overflow_timestamp() {
+        let err = HeerId::new(HeerId::MAX_TIMESTAMP_MS + 1, 0, 0).unwrap_err();
+        assert!(matches!(err, Error::TimestampOutOfRange { .. }));
+    }
+
+    #[test]
+    fn heerid_rejects_overflow_node_id() {
+        let err = HeerId::new(0, HeerId::MAX_NODE_ID + 1, 0).unwrap_err();
+        assert!(matches!(err, Error::NodeIdOutOfRange { .. }));
+    }
+
+    #[test]
+    fn heerid_rejects_overflow_sequence() {
+        let err = HeerId::new(0, 0, HeerId::MAX_SEQUENCE + 1).unwrap_err();
+        assert!(matches!(err, Error::SequenceOutOfRange { .. }));
+    }
+
+    #[test]
+    fn heerid_zero_round_trips() {
+        let id = HeerId::new(0, 0, 0).unwrap();
+        assert_eq!(id.as_i64(), 0);
+        let parts = id.into_parts();
+        assert_eq!(parts.timestamp_ms, 0);
+        assert_eq!(parts.node_id, 0);
+        assert_eq!(parts.sequence, 0);
+    }
+
+    #[test]
+    fn heerid_from_str_round_trips() {
+        let id = HeerId::new(1000, 5, 42).unwrap();
+        let s = id.to_string();
+        let parsed: HeerId = s.parse().unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn heerid_from_str_rejects_negative() {
+        let err = "-1".parse::<HeerId>().unwrap_err();
+        assert_eq!(err, Error::NegativeHeerId);
+    }
+
+    #[test]
+    fn heerid_from_str_rejects_garbage() {
+        let err = "not_a_number".parse::<HeerId>().unwrap_err();
+        assert!(matches!(err, Error::InvalidHeerIdString(_)));
+    }
+
+    // ── RanjId boundary tests ──
+
+    #[test]
+    fn ranjid_accepts_max_field_values() {
+        let id = RanjId::new(
+            RanjId::MAX_TIMESTAMP_MICROS,
+            RanjId::MAX_NODE_ID,
+            RanjId::MAX_SEQUENCE,
+        )
+        .unwrap();
+        let parts = id.into_parts();
+        assert_eq!(parts.timestamp_micros, RanjId::MAX_TIMESTAMP_MICROS);
+        assert_eq!(parts.node_id, RanjId::MAX_NODE_ID);
+        assert_eq!(parts.sequence, RanjId::MAX_SEQUENCE);
+    }
+
+    #[test]
+    fn ranjid_rejects_overflow_timestamp() {
+        let err = RanjId::new(RanjId::MAX_TIMESTAMP_MICROS + 1, 0, 0).unwrap_err();
+        assert!(matches!(err, Error::TimestampOutOfRange { .. }));
+    }
+
+    #[test]
+    fn ranjid_zero_round_trips() {
+        let id = RanjId::new(0, 0, 0).unwrap();
+        let parts = id.into_parts();
+        assert_eq!(parts.timestamp_micros, 0);
+        assert_eq!(parts.node_id, 0);
+        assert_eq!(parts.sequence, 0);
+    }
+
+    #[test]
+    fn ranjid_from_str_round_trips() {
+        let id = RanjId::new(1_000_000, 100, 200).unwrap();
+        let s = id.to_string();
+        let parsed: RanjId = s.parse().unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn ranjid_from_str_rejects_garbage() {
+        let err = "not-a-uuid".parse::<RanjId>().unwrap_err();
+        assert!(matches!(err, Error::InvalidRanjIdString(_)));
+    }
+
+    #[test]
+    fn ranjid_preserves_uuid_version_and_variant() {
+        let id = RanjId::new(999_999, 42, 7).unwrap();
+        let uuid = id.as_uuid();
+        assert_eq!(uuid.get_version_num(), 7);
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+    }
+
+    #[test]
+    fn serde_deserializes_heerid_from_string() {
+        let id = HeerId::new(55, 7, 9).unwrap();
+        let json = format!("\"{}\"", id.as_i64());
+        let parsed: HeerId = serde_json::from_str(&json).unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn serde_deserializes_heerid_from_integer() {
+        let id = HeerId::new(55, 7, 9).unwrap();
+        let json = id.as_i64().to_string();
+        let parsed: HeerId = serde_json::from_str(&json).unwrap();
+        assert_eq!(id, parsed);
     }
 }
