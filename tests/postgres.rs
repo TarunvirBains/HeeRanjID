@@ -935,3 +935,86 @@ async fn ranjid_works_as_column_default() {
     RanjId::from_uuid(rows[1].0).unwrap();
     assert!(rows[0].0 < rows[1].0);
 }
+
+#[tokio::test]
+async fn ranjid_big_bang_epoch_generates_valid_ids() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+
+    // Set epoch to Unix epoch with a Big Bang offset.
+    // The Big Bang is ~13.787 billion years ago.
+    // In microseconds: 13.787e9 * 365.25 * 86400 * 1e6 ≈ 4.3509e23
+    // This value exceeds BIGINT range (9.2e18), proving the NUMERIC
+    // arithmetic works correctly for the full 90-bit timestamp.
+    conn.execute(
+        r#"
+        INSERT INTO heer_config (id, epoch, ranj_epoch_offset)
+        VALUES (
+            1,
+            TIMESTAMP '1970-01-01 00:00:00',
+            FLOOR(13.787e9 * 365.25 * 86400 * 1e6)::NUMERIC(30,0)
+        )
+        "#,
+    )
+    .await
+    .unwrap();
+
+    // Generate a single RanjId — the timestamp will encode microseconds
+    // since the Big Bang, a value far beyond BIGINT range.
+    let uuid: uuid::Uuid = sqlx::query_scalar("SELECT generate_ranjid($1)")
+        .bind(1_i32)
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+
+    let ranj = RanjId::from_uuid(uuid).unwrap();
+    let parts = ranj.into_parts();
+
+    // The timestamp should be roughly 4.35e23 microseconds
+    // (13.787 billion years in microseconds, plus ~55 years to now).
+    // Just verify it's well beyond BIGINT max (9.22e18).
+    assert!(
+        parts.timestamp_micros > 9_200_000_000_000_000_000,
+        "timestamp {} should exceed BIGINT max",
+        parts.timestamp_micros
+    );
+    assert_eq!(parts.node_id, 1);
+
+    // Generate a batch and verify monotonic ordering still works
+    // at these extreme timestamp values.
+    sqlx::query("SELECT set_heer_node_id($1)")
+        .bind(1_i32)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    let batch: Vec<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM generate_ranjids(10)")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+
+    assert_eq!(batch.len(), 10);
+    let ranj_ids: Vec<RanjId> = batch
+        .iter()
+        .map(|u| RanjId::from_uuid(*u).unwrap())
+        .collect();
+    assert!(ranj_ids.windows(2).all(|pair| pair[0] < pair[1]));
+}
