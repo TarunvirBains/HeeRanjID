@@ -1,4 +1,5 @@
-import os
+import uuid
+
 import django
 from django.conf import settings
 
@@ -58,7 +59,8 @@ class TestHeerIdField:
     def test_no_db_default_when_not_primary_key(self):
         field = HeerIdField()
         # db_default should not be set automatically
-        assert not hasattr(field, '_db_default_set') or field.db_default is models.NOT_PROVIDED if hasattr(models, 'NOT_PROVIDED') else True
+        from django.db import models as _models
+        assert not hasattr(field, '_db_default_set') or field.db_default is _models.NOT_PROVIDED if hasattr(_models, 'NOT_PROVIDED') else True
 
     def test_deconstruct_path(self):
         field = HeerIdField()
@@ -69,10 +71,28 @@ class TestHeerIdField:
 
 # ── RanjIdField ──
 
+class _FakeConnection:
+    """Minimal connection stub for db_type tests."""
+    def __init__(self, vendor):
+        self.vendor = vendor
+
+
 class TestRanjIdField:
-    def test_internal_type(self):
+    def test_db_type_postgres(self):
         field = RanjIdField()
-        assert field.get_internal_type() == "UUIDField"
+        conn = _FakeConnection("postgresql")
+        assert field.db_type(conn) == "uuid"
+
+    def test_db_type_mssql(self):
+        field = RanjIdField()
+        conn = _FakeConnection("microsoft")
+        assert field.db_type(conn) == "BINARY(16)"
+
+    def test_rel_db_type_matches_db_type(self):
+        field = RanjIdField()
+        for vendor in ("postgresql", "microsoft"):
+            conn = _FakeConnection(vendor)
+            assert field.rel_db_type(conn) == field.db_type(conn)
 
     def test_from_db_value_none(self):
         field = RanjIdField()
@@ -86,18 +106,32 @@ class TestRanjIdField:
         assert result.sequence == 200
 
     def test_from_db_value_uuid(self):
-        import uuid
         field = RanjIdField()
         u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
         result = field.from_db_value(u, None, None)
         assert isinstance(result, RanjId)
+
+    def test_from_db_value_bytes(self):
+        field = RanjIdField()
+        u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
+        result = field.from_db_value(u.bytes, None, None)
+        assert isinstance(result, RanjId)
+        assert result.node_id == 100
+        assert result.sequence == 200
+
+    def test_from_db_value_memoryview(self):
+        field = RanjIdField()
+        u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
+        mv = memoryview(u.bytes)
+        result = field.from_db_value(mv, None, None)
+        assert isinstance(result, RanjId)
+        assert result.node_id == 100
 
     def test_get_prep_value_none(self):
         field = RanjIdField()
         assert field.get_prep_value(None) is None
 
     def test_get_prep_value_ranjid(self):
-        import uuid
         field = RanjIdField()
         rid = RanjId.from_str("00000000-0000-7000-800f-4240006400c8")
         result = field.get_prep_value(rid)
@@ -112,7 +146,3 @@ class TestRanjIdField:
         field.set_attributes_from_name("test_field")
         _name, path, _args, _kwargs = field.deconstruct()
         assert path == "heeranjid.django.fields.RanjIdField"
-
-
-# Need to import models after django setup
-from django.db import models
