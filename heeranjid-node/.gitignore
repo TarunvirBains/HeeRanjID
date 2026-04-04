@@ -4,3 +4,5 @@ dist/
 # NAPI-RS generated files
 index.js
 index.d.ts
+# SQL files are copied from submodule at pack time, not stored in repo
+sql/
