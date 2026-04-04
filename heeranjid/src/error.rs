@@ -20,6 +20,7 @@ pub enum Error {
     InvalidRanjIdString(String),
 }
 
+#[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum GenerateError {
     #[error("database returned invalid HeerId: {0}")]
@@ -30,6 +31,7 @@ pub enum GenerateError {
     Database(#[from] sqlx::Error),
 }
 
+#[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum StartupError {
     #[error("node {0} is not registered or not active")]

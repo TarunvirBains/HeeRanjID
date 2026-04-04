@@ -1,7 +1,6 @@
 use crate::Error;
 use crate::serde_helpers;
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -22,9 +21,10 @@ pub struct RanjIdParts {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Type, Serialize, Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]
-#[sqlx(transparent)]
+#[cfg_attr(feature = "postgres", derive(sqlx::Type))]
+#[cfg_attr(feature = "postgres", sqlx(transparent))]
 pub struct RanjId(
     #[serde(
         serialize_with = "serde_helpers::serialize_display",
