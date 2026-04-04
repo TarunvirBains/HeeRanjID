@@ -14,6 +14,9 @@ pub const INSTALL_SQL: &str = concat!(
 );
 pub const FETCH_NODE_SQL: &str = include_str!("../sql/postgres/queries/fetch_node.sql");
 pub const FETCH_EPOCH_SQL: &str = include_str!("../sql/postgres/queries/fetch_epoch.sql");
+pub const SEED_SQL: &str = include_str!("../sql/postgres/seed.sql");
+pub const FETCH_ACTIVE_NODE_SQL: &str =
+    include_str!("../sql/postgres/queries/fetch_active_node.sql");
 
 #[derive(Debug, Clone, PartialEq, Eq, FromRow)]
 pub struct HeerNode {
@@ -65,4 +68,49 @@ pub async fn fetch_epoch(
         .await?;
 
     Ok(record.map(|row| row.epoch))
+}
+
+pub async fn fetch_active_node(
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
+    node_id: u16,
+) -> Result<Option<HeerNode>, sqlx::Error> {
+    sqlx::query_as::<_, HeerNode>(FETCH_ACTIVE_NODE_SQL)
+        .bind(i32::from(node_id))
+        .fetch_optional(executor)
+        .await
+}
+
+pub async fn validate_startup(
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
+    node_id: u16,
+) -> Result<HeerNode, crate::StartupError> {
+    let node = fetch_active_node(executor, node_id)
+        .await
+        .map_err(crate::StartupError::Database)?;
+
+    match node {
+        Some(node) => Ok(node),
+        None => Err(crate::StartupError::NodeNotActive(node_id)),
+    }
+}
+
+pub async fn validate_epoch(
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
+) -> Result<sqlx::types::time::PrimitiveDateTime, crate::StartupError> {
+    let epoch = fetch_epoch(executor)
+        .await
+        .map_err(crate::StartupError::Database)?;
+
+    match epoch {
+        Some(epoch) => Ok(epoch),
+        None => Err(crate::StartupError::MissingEpoch),
+    }
+}
+
+pub async fn seed_default_node<'e, E>(executor: E) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::raw_sql(SEED_SQL).execute(executor).await?;
+    Ok(())
 }
