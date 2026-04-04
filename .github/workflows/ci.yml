@@ -58,23 +58,26 @@ jobs:
         run: rustup component add rustfmt clippy
 
       - name: cargo fmt --check
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: cargo check (no-default-features)
+        run: cargo check -p heeranjid --no-default-features
 
       - name: cargo deny check
         run: cargo deny check
 
       - name: cargo test (unit)
-        run: cargo test --lib
+        run: cargo test -p heeranjid --lib
 
       - name: cargo test (integration)
-        run: cargo test --test postgres
+        run: cargo test -p heeranjid --test postgres
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 
       - name: cargo test (concurrency)
-        run: cargo test --test concurrency
+        run: cargo test -p heeranjid --test concurrency
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid

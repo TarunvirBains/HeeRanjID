@@ -4,8 +4,10 @@ use sqlx::FromRow;
 
 pub const SCHEMA_SQL: &str = include_str!("../../sql/postgres/schema.sql");
 pub const SESSION_SQL: &str = include_str!("../../sql/postgres/functions/session.sql");
-pub const GENERATE_HEERID_SQL: &str = include_str!("../../sql/postgres/functions/generate_heerid.sql");
-pub const GENERATE_RANJID_SQL: &str = include_str!("../../sql/postgres/functions/generate_ranjid.sql");
+pub const GENERATE_HEERID_SQL: &str =
+    include_str!("../../sql/postgres/functions/generate_heerid.sql");
+pub const GENERATE_RANJID_SQL: &str =
+    include_str!("../../sql/postgres/functions/generate_ranjid.sql");
 pub const INSTALL_SQL: &str = concat!(
     include_str!("../../sql/postgres/schema.sql"),
     "\n",

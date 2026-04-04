@@ -20,9 +20,7 @@ pub struct RanjIdParts {
     pub sequence: u16,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "postgres", derive(sqlx::Type))]
 #[cfg_attr(feature = "postgres", sqlx(transparent))]
 pub struct RanjId(
