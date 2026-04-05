@@ -2,11 +2,23 @@
 
 ## Goal
 
-Add conversion functions to the Rust `heeranjid` core crate that allow converting between HeerId (64-bit) and RanjId (128-bit UUIDv7). These are used by all language bindings for schema migrations when a system needs to change its ID type.
+Add batch conversion functions to the Rust `heeranjid` core crate that allow converting between HeerId (64-bit) and RanjId (128-bit UUIDv7). These are used by all language bindings for schema migrations when a system needs to change its ID type.
 
 ## Problem
 
 A system that started with HeerId (64-bit, millisecond precision) may need to upgrade to RanjId (128-bit UUIDv7, microsecond precision) as requirements grow. The reverse may also be needed. Currently there's no way to convert existing IDs — you'd have to regenerate them, breaking all references.
+
+### Timestamp Squashing Problem (RanjId → HeerId)
+
+RanjId has microsecond precision. HeerId has millisecond precision. When converting RanjId → HeerId, `timestamp_ms = timestamp_micros / 1000` truncates sub-millisecond digits. Two RanjIds with timestamps `1000500` and `1000999` both become `timestamp_ms = 1000`.
+
+If those two RanjIds share the same `node_id`, they would produce identical HeerIds unless the sequence is adjusted. The conversion must:
+
+1. Group by `(timestamp_ms, node_id)` after truncation
+2. Reassign sequences within each group to avoid collisions
+3. Fail if any group exceeds the 13-bit sequence limit (8191)
+
+This makes RanjId → HeerId conversion inherently a **batch operation**. Single-value conversion is not safe for migration use — it cannot detect timestamp squashing collisions.
 
 ## Bit Layouts
 
@@ -24,78 +36,109 @@ RanjId (u128 as UUIDv7):
   Max sequence: 65,535
 ```
 
-## Conversion: HeerId → RanjId
+## Conversion: HeerId → RanjId (Batch)
 
-Always succeeds. Every HeerId value fits in a RanjId.
+Always succeeds. Every HeerId value fits in a RanjId. No timestamp squashing occurs because the conversion expands precision (ms → us).
 
-**Mapping:**
-- `timestamp_micros = timestamp_ms * 1000` — milliseconds to microseconds. The sub-millisecond digits are zero. This preserves the original ordering and value. Losing microsecond precision going forward is an acceptable tradeoff.
+**Mapping per ID:**
+- `timestamp_micros = timestamp_ms * 1000` — milliseconds to microseconds. Sub-millisecond digits are zero. Preserves original ordering and value.
 - `node_id` — direct copy, zero-extended (9-bit → 16-bit)
 - `sequence` — direct copy, zero-extended (13-bit → 16-bit)
 
-**Implementation:** Decode HeerId into parts, apply mapping, call `RanjId::new(timestamp_micros, node_id, sequence)`.
+Returns old/new tuples so callers can generate UPDATE statements.
 
 ```rust
 impl HeerId {
-    pub fn to_ranjid(&self) -> RanjId {
-        let parts = self.into_parts();
-        RanjId::new(
-            u128::from(parts.timestamp_ms) * 1000,
-            parts.node_id,
-            parts.sequence,
-        ).expect("HeerId always fits in RanjId")
+    /// Pre-flight check — always returns empty (HeerId always fits in RanjId).
+    /// Provided for API symmetry with RanjId::check_heerid_convertibility.
+    pub fn check_ranjid_convertibility(ids: &[HeerId]) -> Vec<ConversionConflict> {
+        Vec::new()
     }
-}
-```
 
-## Conversion: RanjId → HeerId
-
-Can fail. A RanjId may not fit in a HeerId if:
-- `node_id > 511` (exceeds 9-bit max)
-- `sequence > 8191` (exceeds 13-bit max)
-- `timestamp_micros / 1000 > 2^41 - 1` (exceeds 41-bit millisecond max)
-
-**Mapping:**
-- `timestamp_ms = timestamp_micros / 1000` — microseconds to milliseconds, truncating sub-ms precision
-- `node_id` — must fit in 9 bits, error if > 511
-- `sequence` — must fit in 13 bits, error if > 8191
-
-```rust
-impl RanjId {
-    pub fn to_heerid(&self) -> Result<HeerId, ConversionError> {
-        let parts = self.into_parts();
-        let timestamp_ms = parts.timestamp_micros / 1000;
-        if timestamp_ms > u128::from(HeerId::MAX_TIMESTAMP_MS) {
-            return Err(ConversionError::TimestampOverflow { ... });
-        }
-        if parts.node_id > HeerId::MAX_NODE_ID {
-            return Err(ConversionError::NodeIdOverflow { ... });
-        }
-        if parts.sequence > HeerId::MAX_SEQUENCE {
-            return Err(ConversionError::SequenceOverflow { ... });
-        }
-        HeerId::new(timestamp_ms as u64, parts.node_id, parts.sequence)
-            .map_err(|e| ConversionError::HeerIdError(e))
-    }
-}
-```
-
-## Batch Convertibility Check
-
-An associated function on RanjId that checks a batch of IDs for convertibility without actually converting them. Returns the list of IDs that would fail conversion.
-
-```rust
-impl RanjId {
-    pub fn check_heerid_convertibility(ids: &[RanjId]) -> Vec<RanjId> {
+    pub fn batch_to_ranjids(ids: &[HeerId]) -> Vec<(HeerId, RanjId)> {
         ids.iter()
-            .filter(|id| id.to_heerid().is_err())
-            .copied()
+            .map(|hid| {
+                let parts = hid.into_parts();
+                let rid = RanjId::new(
+                    u128::from(parts.timestamp_ms) * 1000,
+                    parts.node_id,
+                    parts.sequence,
+                ).expect("HeerId always fits in RanjId");
+                (*hid, rid)
+            })
             .collect()
     }
 }
 ```
 
-This is used by framework-level migration tools (Django, EF Core, etc.) to pre-flight check before running a schema conversion. If the returned vec is non-empty, the migration should abort and report which IDs can't be converted.
+## Conversion: RanjId → HeerId (Batch)
+
+Can fail. Requires batch-level analysis to handle timestamp squashing.
+
+**Algorithm:**
+
+1. For each RanjId, compute the candidate HeerId parts:
+   - `timestamp_ms = timestamp_micros / 1000`
+   - `node_id` — unchanged (must be ≤ 511)
+   - `sequence` — initially from the RanjId (must be ≤ 8191 before reassignment)
+
+2. Check per-ID hard failures (cannot be fixed by reassignment):
+   - `node_id > 511` → `NodeIdOverflow`
+   - `timestamp_ms > 2^41 - 1` → `TimestampOverflow`
+
+3. Group by `(timestamp_ms, node_id)`
+
+4. Within each group, sort by original RanjId (preserves ordering), then assign sequences `0, 1, 2, ...`
+
+5. If any group has more than 8192 members → `SequenceOverflow`
+
+6. Return `Vec<(RanjId, HeerId)>` mapping old → new
+
+```rust
+impl RanjId {
+    pub fn batch_to_heerids(ids: &[RanjId]) -> Result<Vec<(RanjId, HeerId)>, ConversionError> {
+        // 1. Check hard failures
+        // 2. Group by (timestamp_ms, node_id)
+        // 3. Assign sequences within each group
+        // 4. Build (old, new) pairs
+        // ...
+    }
+}
+```
+
+## Pre-flight Convertibility Check
+
+An associated function that analyzes a batch without converting. Returns a list of conflicts — each describing why a group of IDs can't convert.
+
+```rust
+#[derive(Debug)]
+pub struct ConversionConflict {
+    pub kind: ConflictKind,
+    pub ranj_ids: Vec<RanjId>,
+}
+
+#[derive(Debug)]
+pub enum ConflictKind {
+    /// node_id exceeds HeerId's 9-bit max
+    NodeIdOverflow { node_id: u16 },
+    /// timestamp exceeds HeerId's 41-bit max
+    TimestampOverflow { timestamp_ms: u64 },
+    /// Too many IDs in one (timestamp_ms, node_id) group after squashing
+    SequenceOverflow { timestamp_ms: u64, node_id: u16, count: usize, max: usize },
+}
+
+impl RanjId {
+    pub fn check_heerid_convertibility(ids: &[RanjId]) -> Vec<ConversionConflict> {
+        // Group by (timestamp_ms, node_id)
+        // Check node_id overflow
+        // Check timestamp overflow
+        // Check group sizes > 8192
+        // Return conflicts
+    }
+}
+```
+
+If the returned vec is empty, `batch_to_heerids` is guaranteed to succeed.
 
 ## Error Type
 
@@ -108,8 +151,8 @@ pub enum ConversionError {
     #[error("node_id {value} exceeds HeerId max ({max})")]
     NodeIdOverflow { value: u16, max: u16 },
 
-    #[error("sequence {value} exceeds HeerId max ({max})")]
-    SequenceOverflow { value: u16, max: u16 },
+    #[error("{count} IDs share (timestamp_ms={timestamp_ms}, node_id={node_id}) after squashing, exceeding sequence max {max}")]
+    SequenceOverflow { timestamp_ms: u64, node_id: u16, count: usize, max: usize },
 
     #[error("HeerId construction failed: {0}")]
     HeerIdError(#[from] Error),
@@ -118,17 +161,25 @@ pub enum ConversionError {
 
 ## FFI Exposure
 
-The conversion functions must be exposed through `heeranjid-ffi` for .NET and other C ABI consumers:
+Exposed through `heeranjid-ffi` for .NET and other C ABI consumers:
 
 ```c
-// HeerId → RanjId (always succeeds)
-int heer_id_to_ranj_id(int64_t heer_id, uint8_t* ranj_id_out);  // writes 16 bytes
+// Batch HeerId → RanjId (always succeeds)
+// Writes pairs to output buffer: [heer_id_0, ranj_id_0, heer_id_1, ranj_id_1, ...]
+int heer_id_batch_to_ranj_ids(
+    const int64_t* heer_ids, int count,
+    int64_t* heer_ids_out, uint8_t* ranj_ids_out);
 
-// RanjId → HeerId (can fail)
-int ranj_id_to_heer_id(const uint8_t* ranj_id, int64_t* heer_id_out);  // returns 0 on success, -1 on error
+// Batch RanjId → HeerId (can fail)
+// Returns 0 on success, -1 on error (call heer_last_error for details)
+int ranj_id_batch_to_heer_ids(
+    const uint8_t* ranj_ids, int count,
+    uint8_t* ranj_ids_out, int64_t* heer_ids_out);
 
-// Batch check (returns count of unconvertible IDs)
-int ranj_id_check_heer_convertibility(const uint8_t* ranj_ids, int count, uint8_t* failures_out, int* failure_count_out);
+// Pre-flight check (returns count of conflicts)
+int ranj_id_check_heer_convertibility(
+    const uint8_t* ranj_ids, int count,
+    int* conflict_count_out);
 ```
 
 ## Python Binding
@@ -136,37 +187,50 @@ int ranj_id_check_heer_convertibility(const uint8_t* ranj_ids, int count, uint8_
 Exposed through PyO3 in the `heeranjid` Python package:
 
 ```python
-hid = HeerId(12345)
-rid = hid.to_ranjid()       # always succeeds
+# Pre-flight check (always empty — HeerId always fits in RanjId)
+conflicts = HeerId.check_ranjid_convertibility([hid1, hid2, hid3])
 
-rid = RanjId.from_str("...")
-hid = rid.to_heerid()       # raises ValueError if overflow
+# Batch HeerId → RanjId (always succeeds)
+pairs = HeerId.batch_to_ranjids([hid1, hid2, hid3])
+# Returns: [(hid1, rid1), (hid2, rid2), (hid3, rid3)]
 
-# Batch check
-unconvertible = RanjId.check_heerid_convertibility([rid1, rid2, rid3])
+# Pre-flight check (may return conflicts)
+conflicts = RanjId.check_heerid_convertibility([rid1, rid2, rid3])
+# Returns: [ConversionConflict(kind=..., ranj_ids=[...])]
+
+# Batch RanjId → HeerId (raises ValueError if any group overflows)
+pairs = RanjId.batch_to_heerids([rid1, rid2, rid3])
+# Returns: [(rid1, hid1), (rid2, hid2), (rid3, hid3)]
 ```
+
+Both directions follow the same pattern: `check_*_convertibility` → `batch_to_*`. Framework migration tools always call check first, then convert.
 
 ## Testing
 
 **Rust unit tests:**
-- HeerId → RanjId preserves timestamp (ms * 1000), node_id, sequence
-- RanjId → HeerId with valid values succeeds
-- RanjId → HeerId with node_id > 511 fails with NodeIdOverflow
-- RanjId → HeerId with sequence > 8191 fails with SequenceOverflow
-- RanjId → HeerId with timestamp overflow fails
-- Roundtrip: HeerId → RanjId → HeerId equals original
-- Batch check returns empty vec for all-convertible IDs
-- Batch check returns correct IDs for mixed batch
+- `HeerId::batch_to_ranjids` preserves timestamp (ms * 1000), node_id, sequence for each ID
+- `HeerId::batch_to_ranjids` returns correct (old, new) tuples
+- `RanjId::batch_to_heerids` with no squashing produces correct mappings
+- `RanjId::batch_to_heerids` with timestamp squashing reassigns sequences correctly
+- `RanjId::batch_to_heerids` preserves ordering within squashed groups
+- `RanjId::batch_to_heerids` with node_id > 511 fails with NodeIdOverflow
+- `RanjId::batch_to_heerids` with timestamp overflow fails
+- `RanjId::batch_to_heerids` with too many IDs in one squashed group fails with SequenceOverflow
+- Roundtrip: `batch_to_ranjids` → `batch_to_heerids` preserves ordering (sequences may differ due to reassignment)
+- `check_heerid_convertibility` returns empty for all-valid batch
+- `check_heerid_convertibility` returns correct conflicts for mixed batch
+- `check_heerid_convertibility` detects sequence overflow from timestamp squashing
 
 **FFI tests:**
-- C ABI roundtrip
+- Batch roundtrip through C ABI
 - Error code on overflow
 
 **Python tests:**
-- `to_ranjid()` method on HeerId
-- `to_heerid()` method on RanjId
-- `check_heerid_convertibility` class method on RanjId
-- ValueError on overflow
+- `HeerId.check_ranjid_convertibility` class method returns empty list
+- `HeerId.batch_to_ranjids` class method returns correct tuples
+- `RanjId.check_heerid_convertibility` class method detects conflicts
+- `RanjId.batch_to_heerids` class method returns correct tuples
+- `RanjId.batch_to_heerids` raises ValueError on overflow
 
 ## What's NOT in scope
 
