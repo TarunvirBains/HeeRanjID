@@ -3,6 +3,11 @@ name = "heeranjid"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit UUIDv8) with configurable precision"
+repository = "https://github.com/TarunvirBains/HeeRanjID"
+keywords = ["distributed", "id", "uuid", "snowflake", "heerid"]
+categories = ["data-structures", "database"]
+readme = "README.md"
 
 [dependencies]
 serde.workspace = true

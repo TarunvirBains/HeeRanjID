@@ -16,6 +16,12 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "maturin>=1.0"]
 
+readme = "../../README.md"
+
+[project.urls]
+Homepage = "https://github.com/TarunvirBains/HeeRanjID"
+Repository = "https://github.com/TarunvirBains/HeeRanjID"
+
 [tool.maturin]
 python-source = "python"
 module-name = "heeranjid._heeranjid"
