@@ -8,14 +8,13 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  DATABASE_URL: postgres://postgres:postgres@localhost:5432/heeranjid
 
 jobs:
-  check:
-    name: Lint & Test
+  rust:
+    name: Rust (lint, test, build artifacts)
     runs-on: ubuntu-latest
     container:
-      image: rust:1.94-slim-bullseye
+      image: rust:1.94-slim-bookworm
 
     services:
       postgres:
@@ -31,18 +30,26 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Install git and curl
-        run: apt-get update && apt-get install -y --no-install-recommends git curl
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends \
+            git curl python3 python3-pip python3-venv nodejs npm
 
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install cargo-deny
+      - name: Install Rust tools
         run: |
+          rustup component add rustfmt clippy
           DENY_VERSION=$(curl -sL https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
           curl -sL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
             | tar xz -C /usr/local/bin --strip-components=1 --wildcards '*/cargo-deny'
+
+      - name: Install build tools
+        run: |
+          pip install maturin --break-system-packages
+          npm install -g @napi-rs/cli
 
       - name: Cache cargo registry & build
         uses: actions/cache@v4
@@ -54,9 +61,7 @@ jobs:
           key: cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: cargo-
 
-      - name: Install rustfmt & clippy
-        run: rustup component add rustfmt clippy
-
+      # Lint
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
@@ -66,6 +71,7 @@ jobs:
       - name: cargo deny check
         run: cargo deny check
 
+      # Test
       - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
 
@@ -78,3 +84,135 @@ jobs:
         run: cargo test -p heeranjid-sqlx --test concurrency
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      # Build binding artifacts
+      - name: Build Python wheel
+        run: cd bindings/python && maturin build --release
+        env:
+          PYO3_PYTHON: python3
+
+      - name: Build TypeScript native module
+        run: cd bindings/typescript && npm install && npm run build
+
+      - name: Build FFI shared library
+        run: cargo build -p heeranjid-ffi --release
+
+      # Upload artifacts
+      - name: Upload Python wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel
+          path: target/wheels/*.whl
+
+      - name: Upload TypeScript native module
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-native
+          path: bindings/typescript/heeranjid.*.node
+
+      - name: Upload FFI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-linux-x64
+          path: |
+            target/release/libheeranjid_ffi.so
+            heeranjid-ffi/heeranjid.h
+
+  python:
+    name: Python tests
+    needs: rust
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.11-slim-bookworm
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_DB: heeranjid
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download Python wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheel
+          path: dist/
+
+      - name: Install packages
+        run: |
+          pip install dist/*.whl
+          pip install -e bindings/python/django/
+          pip install pytest django psycopg2-binary
+
+      - name: Run core tests
+        run: pytest bindings/python/tests/ -v
+
+      - name: Run Django field tests
+        run: pytest bindings/python/django/tests/test_django_fields.py -v
+
+      - name: Run Postgres integration tests
+        run: pytest bindings/python/django/tests/test_postgres_integration.py -v
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+  typescript:
+    name: TypeScript tests
+    needs: rust
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Download native module
+        uses: actions/download-artifact@v4
+        with:
+          name: typescript-native
+          path: bindings/typescript/
+
+      - name: Install and test
+        run: |
+          cd bindings/typescript
+          npm install
+          npm test
+
+  dotnet:
+    name: .NET tests
+    needs: rust
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0
+
+      - name: Download FFI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ffi-linux-x64
+          path: ffi-artifacts/
+
+      - name: Run tests
+        run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts/target/release
