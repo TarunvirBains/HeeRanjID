@@ -11,9 +11,13 @@
     "postpack": "rm -rf ./sql",
     "test": "vitest run"
   },
-  "files": ["dist/", "src/", "sql/"],
+  "files": [
+    "dist/",
+    "src/",
+    "sql/"
+  ],
   "dependencies": {
-    "heeranjid": "*"
+    "heeranjid": "file:../"
   },
   "peerDependencies": {
     "@prisma/client": ">=5.0.0"
@@ -25,6 +29,6 @@
   },
   "devDependencies": {
     "typescript": "^5",
-    "vitest": "^2"
+    "vitest": "^4.1.2"
   }
 }

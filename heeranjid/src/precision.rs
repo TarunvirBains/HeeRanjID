@@ -59,9 +59,7 @@ pub fn generation_precision() -> RanjPrecision {
         Ok("ns") => RanjPrecision::Nanoseconds,
         Ok("ps") => RanjPrecision::Picoseconds,
         Ok("fs") => RanjPrecision::Femtoseconds,
-        Ok(invalid) => panic!(
-            "RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"
-        ),
+        Ok(invalid) => panic!("RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"),
         Err(_) => RanjPrecision::Nanoseconds, // unset → default
     })
 }
