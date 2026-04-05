@@ -95,7 +95,11 @@ jobs:
         run: cd bindings/typescript && npm install && npm run build
 
       - name: Build FFI shared library
-        run: cargo build -p heeranjid-ffi --release
+        run: |
+          cargo build -p heeranjid-ffi --release
+          mkdir -p ffi-out
+          cp target/release/libheeranjid_ffi.so ffi-out/
+          cp heeranjid-ffi/heeranjid.h ffi-out/
 
       # Upload artifacts
       - name: Upload Python wheel
@@ -117,9 +121,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-linux-x64
-          path: |
-            target/release/libheeranjid_ffi.so
-            heeranjid-ffi/heeranjid.h
+          path: ffi-out/
 
   python:
     name: Python tests
