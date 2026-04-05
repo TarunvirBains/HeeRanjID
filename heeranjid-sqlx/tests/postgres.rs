@@ -993,13 +993,12 @@ async fn ranjid_big_bang_epoch_generates_valid_ids() {
     let ranj = RanjId::from_uuid(uuid).unwrap();
     let parts = ranj.into_parts();
 
-    // The timestamp should be roughly 4.35e23 microseconds
-    // (13.787 billion years in microseconds, plus ~55 years to now).
+    // The timestamp should be roughly 4.35e23 (in the stored precision unit).
     // Just verify it's well beyond BIGINT max (9.22e18).
     assert!(
-        parts.timestamp_micros > 9_200_000_000_000_000_000,
+        parts.timestamp > 9_200_000_000_000_000_000,
         "timestamp {} should exceed BIGINT max",
-        parts.timestamp_micros
+        parts.timestamp
     );
     assert_eq!(parts.node_id, 1);
 
