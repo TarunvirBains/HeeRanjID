@@ -37,7 +37,12 @@ impl RanjId {
     pub const MAX_NODE_ID: u16 = (1u16 << 15) - 1;
     pub const MAX_SEQUENCE: u16 = u16::MAX;
 
-    pub fn new(timestamp: u128, precision: RanjPrecision, node_id: u16, sequence: u16) -> Result<Self, Error> {
+    pub fn new(
+        timestamp: u128,
+        precision: RanjPrecision,
+        node_id: u16,
+        sequence: u16,
+    ) -> Result<Self, Error> {
         if timestamp > Self::MAX_TIMESTAMP {
             return Err(Error::TimestampOutOfRange {
                 value: timestamp,

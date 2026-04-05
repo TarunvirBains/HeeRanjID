@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::heer::HeerId;
-use crate::precision::{generation_precision, RanjPrecision};
+use crate::precision::{RanjPrecision, generation_precision};
 use crate::ranj::RanjId;
 
 #[derive(Debug, thiserror::Error)]
@@ -12,7 +12,9 @@ pub enum ConversionError {
     #[error("node_id {value} exceeds HeerId max ({max})")]
     NodeIdOverflow { value: u16, max: u16 },
 
-    #[error("{count} IDs share (timestamp_ms={timestamp_ms}, node_id={node_id}) after squashing, exceeding sequence max {max}")]
+    #[error(
+        "{count} IDs share (timestamp_ms={timestamp_ms}, node_id={node_id}) after squashing, exceeding sequence max {max}"
+    )]
     SequenceOverflow {
         timestamp_ms: u64,
         node_id: u16,
@@ -32,8 +34,12 @@ pub struct ConversionConflict {
 
 #[derive(Debug, Clone)]
 pub enum ConflictKind {
-    NodeIdOverflow { node_id: u16 },
-    TimestampOverflow { timestamp_ms: u64 },
+    NodeIdOverflow {
+        node_id: u16,
+    },
+    TimestampOverflow {
+        timestamp_ms: u64,
+    },
     SequenceOverflow {
         timestamp_ms: u64,
         node_id: u16,
@@ -81,22 +87,15 @@ impl RanjId {
 
         for &rid in ids {
             let parts = rid.into_parts();
-            let timestamp_ms =
-                (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
+            let timestamp_ms = (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
 
             if parts.node_id > HeerId::MAX_NODE_ID {
-                node_overflow
-                    .entry(parts.node_id)
-                    .or_default()
-                    .push(rid);
+                node_overflow.entry(parts.node_id).or_default().push(rid);
                 continue;
             }
 
             if timestamp_ms > HeerId::MAX_TIMESTAMP_MS {
-                ts_overflow
-                    .entry(timestamp_ms)
-                    .or_default()
-                    .push(rid);
+                ts_overflow.entry(timestamp_ms).or_default().push(rid);
                 continue;
             }
 
@@ -146,8 +145,7 @@ impl RanjId {
 
         for &rid in ids {
             let parts = rid.into_parts();
-            let timestamp_ms =
-                (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
+            let timestamp_ms = (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
 
             if parts.node_id > HeerId::MAX_NODE_ID {
                 return Err(ConversionError::NodeIdOverflow {
@@ -256,8 +254,7 @@ mod tests {
         for (rid, hid) in &results {
             let rparts = rid.into_parts();
             let hparts = hid.into_parts();
-            let expected_ms =
-                (rparts.timestamp / rparts.precision.from_millis_multiplier()) as u64;
+            let expected_ms = (rparts.timestamp / rparts.precision.from_millis_multiplier()) as u64;
             assert_eq!(hparts.timestamp_ms, expected_ms);
         }
     }
@@ -349,13 +346,7 @@ mod tests {
         let count = HeerId::MAX_SEQUENCE as usize + 2; // 8193
         let rids: Vec<RanjId> = (0..count)
             .map(|i| {
-                RanjId::new(
-                    1_000_000 + (i as u128),
-                    RanjPrecision::Nanoseconds,
-                    1,
-                    0,
-                )
-                .unwrap()
+                RanjId::new(1_000_000 + (i as u128), RanjPrecision::Nanoseconds, 1, 0).unwrap()
             })
             .collect();
 
@@ -382,9 +373,7 @@ mod tests {
 
     #[test]
     fn check_heerid_convertibility_detects_node_id_overflow() {
-        let rids = vec![
-            RanjId::new(1_000_000, RanjPrecision::Microseconds, 1000, 0).unwrap(),
-        ];
+        let rids = vec![RanjId::new(1_000_000, RanjPrecision::Microseconds, 1000, 0).unwrap()];
         let conflicts = RanjId::check_heerid_convertibility(&rids);
         assert_eq!(conflicts.len(), 1);
         assert!(matches!(
@@ -399,13 +388,7 @@ mod tests {
         let count = HeerId::MAX_SEQUENCE as usize + 2; // 8193
         let rids: Vec<RanjId> = (0..count)
             .map(|i| {
-                RanjId::new(
-                    1_000_000 + (i as u128),
-                    RanjPrecision::Nanoseconds,
-                    1,
-                    0,
-                )
-                .unwrap()
+                RanjId::new(1_000_000 + (i as u128), RanjPrecision::Nanoseconds, 1, 0).unwrap()
             })
             .collect();
 

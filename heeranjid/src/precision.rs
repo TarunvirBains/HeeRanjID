@@ -4,8 +4,8 @@ use std::sync::OnceLock;
 #[repr(u8)]
 pub enum RanjPrecision {
     Microseconds = 0b00,
-    Nanoseconds  = 0b01,
-    Picoseconds  = 0b10,
+    Nanoseconds = 0b01,
+    Picoseconds = 0b10,
     Femtoseconds = 0b11,
 }
 
@@ -13,8 +13,8 @@ impl RanjPrecision {
     pub fn from_micros_multiplier(self) -> u128 {
         match self {
             Self::Microseconds => 1,
-            Self::Nanoseconds  => 1_000,
-            Self::Picoseconds  => 1_000_000,
+            Self::Nanoseconds => 1_000,
+            Self::Picoseconds => 1_000_000,
             Self::Femtoseconds => 1_000_000_000,
         }
     }
@@ -44,8 +44,8 @@ impl RanjPrecision {
     pub fn label(self) -> &'static str {
         match self {
             Self::Microseconds => "us",
-            Self::Nanoseconds  => "ns",
-            Self::Picoseconds  => "ps",
+            Self::Nanoseconds => "ns",
+            Self::Picoseconds => "ps",
             Self::Femtoseconds => "fs",
         }
     }
@@ -54,13 +54,11 @@ impl RanjPrecision {
 static GENERATION_PRECISION: OnceLock<RanjPrecision> = OnceLock::new();
 
 pub fn generation_precision() -> RanjPrecision {
-    *GENERATION_PRECISION.get_or_init(|| {
-        match std::env::var("RANJID_PRECISION").as_deref() {
-            Ok("us") => RanjPrecision::Microseconds,
-            Ok("ns") => RanjPrecision::Nanoseconds,
-            Ok("ps") => RanjPrecision::Picoseconds,
-            Ok("fs") => RanjPrecision::Femtoseconds,
-            _ => RanjPrecision::Nanoseconds,
-        }
+    *GENERATION_PRECISION.get_or_init(|| match std::env::var("RANJID_PRECISION").as_deref() {
+        Ok("us") => RanjPrecision::Microseconds,
+        Ok("ns") => RanjPrecision::Nanoseconds,
+        Ok("ps") => RanjPrecision::Picoseconds,
+        Ok("fs") => RanjPrecision::Femtoseconds,
+        _ => RanjPrecision::Nanoseconds,
     })
 }

@@ -9,7 +9,10 @@ pub use convert::{ConflictKind, ConversionConflict, ConversionError};
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use precision::{RanjPrecision, generation_precision};
-pub use ranj::{RANJ_NODE_ID_BITS, RANJ_PRECISION_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts};
+pub use ranj::{
+    RANJ_NODE_ID_BITS, RANJ_PRECISION_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId,
+    RanjIdParts,
+};
 
 #[cfg(test)]
 mod tests {
@@ -174,7 +177,8 @@ mod tests {
 
     #[test]
     fn ranjid_rejects_overflow_timestamp() {
-        let err = RanjId::new(RanjId::MAX_TIMESTAMP + 1, RanjPrecision::Microseconds, 0, 0).unwrap_err();
+        let err =
+            RanjId::new(RanjId::MAX_TIMESTAMP + 1, RanjPrecision::Microseconds, 0, 0).unwrap_err();
         assert!(matches!(err, Error::TimestampOutOfRange { .. }));
     }
 
@@ -211,8 +215,12 @@ mod tests {
 
     #[test]
     fn ranjid_precision_round_trips() {
-        for prec in [RanjPrecision::Microseconds, RanjPrecision::Nanoseconds,
-                     RanjPrecision::Picoseconds, RanjPrecision::Femtoseconds] {
+        for prec in [
+            RanjPrecision::Microseconds,
+            RanjPrecision::Nanoseconds,
+            RanjPrecision::Picoseconds,
+            RanjPrecision::Femtoseconds,
+        ] {
             let id = RanjId::new(1_000_000, prec, 100, 200).unwrap();
             let parts = id.into_parts();
             assert_eq!(parts.precision, prec);
