@@ -1,4 +1,4 @@
-import { HeerId, RanjId } from "../../index.js";
+import { HeerId, RanjId } from "heeranjid";
 
 /**
  * Shape expected from Prisma's `$queryRaw` for a single HeerId row.
@@ -59,7 +59,7 @@ export interface HeeranjidClient {
  * Usage:
  * ```ts
  * import { PrismaClient } from "@prisma/client";
- * import { heeranjidExtension } from "heeranjid";
+ * import { heeranjidExtension } from "heeranjid-prisma";
  *
  * const prisma = new PrismaClient().$extends(heeranjidExtension());
  *

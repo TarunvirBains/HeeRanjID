@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { heeranjidExtension } from "../js/prisma/index.js";
-import { getInstallSQL, getSeedSQL } from "../js/prisma/setup.js";
+import { heeranjidExtension } from "../src/index.js";
+import { getInstallSQL, getSeedSQL } from "../src/setup.js";
 
 describe("Prisma extension", () => {
   describe("heeranjidExtension", () => {

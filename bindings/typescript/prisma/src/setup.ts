@@ -9,14 +9,14 @@ type Backend = "postgres" | "mssql";
  * - In development (repo checkout), sql/ lives at the repo root as the git submodule.
  */
 function resolveSqlRoot(): string {
-  // __dirname is bindings/node/js/prisma in both dev and built scenarios.
-  // Bundled path: bindings/node/sql/ (two dirs up from __dirname)
+  // __dirname is bindings/typescript/prisma/src in dev and bindings/typescript/prisma/dist in built scenarios.
+  // Bundled path: bindings/typescript/prisma/sql/ (two dirs up from __dirname)
   const bundled = join(__dirname, "..", "..", "sql");
   if (existsSync(bundled)) {
     return bundled;
   }
-  // Development / submodule path: repo root sql/ (four dirs up from __dirname)
-  const submodule = join(__dirname, "..", "..", "..", "..", "sql");
+  // Development / submodule path: repo root sql/ (five dirs up from __dirname)
+  const submodule = join(__dirname, "..", "..", "..", "..", "..", "sql");
   if (existsSync(submodule)) {
     return submodule;
   }
