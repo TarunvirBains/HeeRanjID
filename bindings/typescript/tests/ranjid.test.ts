@@ -8,9 +8,9 @@ describe("RanjId", () => {
 
   describe("fromString / toUuid / toStringValue", () => {
     it("round-trips through UUID string", () => {
-      // First, create via fromString with a valid UUIDv7.
-      // We need a real UUIDv7 to test with. Let's construct one.
-      // UUIDv7 format: tttttttt-tttt-7ttt-Vxxx-xxxxxxxxxxxx
+      // First, create via fromString with a valid UUIDv8.
+      // We need a real UUIDv8 to test with. Let's construct one.
+      // UUIDv8 format: tttttttt-tttt-8ttt-Vxxx-xxxxxxxxxxxx
       // For our custom layout:
       //   bits 127-80: timestamp_high (48 bits)
       //   bits 79-76:  version = 0111
@@ -43,7 +43,7 @@ describe("RanjId", () => {
 
       const raw =
         (timestamp_high << 80n) |
-        (7n << 76n) |
+        (8n << 76n) |
         (timestamp_mid << 64n) |
         (2n << 62n) |
         (timestamp_low << 32n) |
@@ -59,7 +59,7 @@ describe("RanjId", () => {
       expect(id.toStringValue()).toBe(uuid);
     });
 
-    it("rejects non-UUIDv7 strings", () => {
+    it("rejects non-UUIDv8 strings", () => {
       // UUID v4 (random) should be rejected
       expect(() => RanjId.fromString("550e8400-e29b-41d4-a716-446655440000")).toThrow();
     });
@@ -70,14 +70,14 @@ describe("RanjId", () => {
   });
 
   describe("field getters", () => {
-    // Build a known UUIDv7
+    // Build a known UUIDv8
     function makeKnownId(ts: bigint, node: bigint, seq: bigint): string {
       const th = (ts >> 42n) & ((1n << 48n) - 1n);
       const tm = (ts >> 30n) & ((1n << 12n) - 1n);
       const tl = ts & ((1n << 30n) - 1n);
       const raw =
         (th << 80n) |
-        (7n << 76n) |
+        (8n << 76n) |
         (tm << 64n) |
         (2n << 62n) |
         (tl << 32n) |
@@ -109,8 +109,8 @@ describe("RanjId", () => {
   describe("zero value", () => {
     it("round-trips zero fields", () => {
       // timestamp=0, node=0, seq=0
-      // raw = (7 << 76) | (2 << 62)
-      const raw = (7n << 76n) | (2n << 62n);
+      // raw = (8 << 76) | (2 << 62)
+      const raw = (8n << 76n) | (2n << 62n);
       const hex = raw.toString(16).padStart(32, "0");
       const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
       const id = RanjId.fromString(uuid);
