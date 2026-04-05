@@ -193,7 +193,9 @@ jobs:
         run: mypy bindings/python/python/heeranjid/ --ignore-missing-imports
 
       - name: Security audit
-        run: pip-audit
+        run: |
+          pip install --upgrade pip wheel
+          pip-audit --skip-editable
 
       - name: License check
         run: pip-licenses --allow-only="MIT;BSD-3-Clause;BSD-2-Clause;Apache-2.0;PSF-2.0;LGPL-2.1-or-later;ISC;Python-2.0;MPL-2.0"
