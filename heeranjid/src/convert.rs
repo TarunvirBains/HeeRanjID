@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::heer::HeerId;
-use crate::precision::{RanjPrecision, generation_precision};
+use crate::precision::generation_precision;
 use crate::ranj::RanjId;
 
 #[derive(Debug, thiserror::Error)]
@@ -195,6 +195,7 @@ impl RanjId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::precision::RanjPrecision;
 
     // ── HeerId → RanjId tests ──
 
