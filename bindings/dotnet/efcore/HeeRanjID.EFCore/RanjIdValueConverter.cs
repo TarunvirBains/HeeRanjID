@@ -1,6 +1,7 @@
+using HeeRanjID;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace HeeRanjID;
+namespace HeeRanjID.EFCore;
 
 /// <summary>
 /// EF Core value converter that stores RanjId as a Guid (uuid) column.
