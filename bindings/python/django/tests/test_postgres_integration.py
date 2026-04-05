@@ -37,11 +37,15 @@ def pg_conn():
     for sql in [postgres.SCHEMA, postgres.SESSION, postgres.GENERATE_HEERID, postgres.GENERATE_RANJID, postgres.SEED]:
         cur.execute(sql)
 
-    # Set epoch to a known value
+    # Install heer_configure() and set epoch
+    cur.execute(postgres.CONFIGURE)
     cur.execute("""
-        INSERT INTO heer_config (id, epoch) VALUES (1, '2024-01-01T00:00:00')
-        ON CONFLICT (id) DO UPDATE SET epoch = EXCLUDED.epoch
+        INSERT INTO heer_config (id, epoch, precision) VALUES (1, '2026-01-01T00:00:00', 'us')
+        ON CONFLICT (id) DO UPDATE SET epoch = EXCLUDED.epoch, precision = EXCLUDED.precision
     """)
+
+    # Regenerate functions with baked-in epoch and new bit layout
+    cur.execute("SELECT heer_configure()")
 
     # Register node 2 for multi-node tests
     cur.execute("""
@@ -197,12 +201,12 @@ class TestRanjIdPostgres:
         for i in range(len(ids) - 1):
             assert ids[i] < ids[i + 1]
 
-    def test_ranjid_is_valid_uuidv7(self, cursor):
+    def test_ranjid_is_valid_uuidv8(self, cursor):
         cursor.execute("SELECT generate_ranjid(1)")
         raw = cursor.fetchone()[0]
         u = uuid.UUID(str(raw))
-        # UUIDv7: version nibble = 7
-        assert u.version == 7
+        # UUIDv8: version nibble = 8
+        assert u.version == 8
         # Variant should be RFC 4122 (0b10xx)
         assert (u.int >> 62) & 0b11 == 0b10
 

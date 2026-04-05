@@ -25,15 +25,17 @@ class Customer(HeeRanjIdPKMixin, models.Model):
 
 **128-bit RanjId:**
 ```python
+from heeranjid_django import HeeRanjIdPKMixin, HeeRanjIdFieldType
+
 class Customer(HeeRanjIdPKMixin, models.Model):
     name = models.CharField(max_length=100)
 
     class HeeRanjId:
-        field_type = "ranjid"  # default: "heerid"
+        field_type = HeeRanjIdFieldType.RANJID
 ```
 
 **Switching from HeerId to RanjId:**
-1. Change `field_type = "ranjid"` in the model's `HeeRanjId` inner class
+1. Change `field_type = HeeRanjIdFieldType.RANJID` in the model's `HeeRanjId` inner class
 2. Run `manage.py makemigrations` — auto-detects the field change, discovers FKs, generates a `HeeRanjIdConversion` migration operation
 3. Review the generated migration, add any FK references the auto-detection missed
 4. Run `manage.py migrate` — runs pre-flight overflow check, then converts all IDs
@@ -141,6 +143,54 @@ heeranjid_django/
 - Model A (PK) → Model B (FK to A) → Model C (FK to B)
 - Convert A's PK: verify B and C's FK columns also converted
 - Query relationships still work after conversion
+
+## ID Prefetch Strategy
+
+The mixin supports configurable ID generation timing via `HeeRanjId.prefetch`:
+
+```python
+from heeranjid_django import HeeRanjIdPKMixin, HeeRanjIdFieldType, HeeRanjIdPrefetch
+
+class MyModel(HeeRanjIdPKMixin, models.Model):
+    class HeeRanjId:
+        field_type = HeeRanjIdFieldType.HEERID
+        prefetch = HeeRanjIdPrefetch.SAVE
+```
+
+### Enum types
+
+```python
+class HeeRanjIdFieldType(Enum):
+    HEERID = "heerid"
+    RANJID = "ranjid"
+
+class HeeRanjIdPrefetch(Enum):
+    SAVE = "save"   # generate on pre_save if null (default)
+    INIT = "init"   # generate on __init__ (eager)
+    MANUAL = None   # never auto-generate (use prefetch_ids() explicitly)
+```
+
+| Setting | Behavior | Use case |
+|---------|----------|----------|
+| `SAVE` (default) | `pre_save` generates if null | Safe for loops, general purpose |
+| `INIT` | `__init__` generates immediately | Forms/views where ID is needed before save |
+| `MANUAL` (`None`) | Never auto-generate | Manual control, use `prefetch_ids()` explicitly |
+
+### View utility: `prefetch_ids(model, count)`
+
+Batch-generates IDs for use in forms or API responses before save:
+
+```python
+from heeranjid_django import prefetch_ids
+
+ids = prefetch_ids(MyModel, 10)  # returns 10 HeerId or RanjId values
+```
+
+Works regardless of the `prefetch` setting. The `pre_save` fallback always catches objects with null IDs, so even if a prefetched ID is lost (form abandoned), the save path remains safe.
+
+### Why prefetch is safe
+
+IDs occupy a unique point in time — they're never reused. "Wasted" prefetched IDs from abandoned forms consume sequence numbers within a millisecond, but with 8,192 sequences/ms (HeerId) or 65,536/tick (RanjId), the cost is negligible.
 
 ## What's NOT in scope
 

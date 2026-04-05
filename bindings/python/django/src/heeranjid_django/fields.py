@@ -25,6 +25,7 @@ class HeerIdField(models.BigIntegerField):
                 )
 
         from django.db.models.signals import class_prepared
+
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def pre_save(self, model_instance, add):
@@ -35,14 +36,16 @@ class HeerIdField(models.BigIntegerField):
             return value
 
         from django.db import connection
+
         from heeranjid_django.managers import _get_node_id
+
         node_id = _get_node_id()
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute(f"EXEC generate_id @in_node_id = {node_id}")
+            cursor.execute("EXEC generate_id @in_node_id = %s", [node_id])
         else:
-            cursor.execute(f"SELECT generate_id({node_id})")
+            cursor.execute("SELECT generate_id(%s)", [node_id])
         row = cursor.fetchone()
         new_id = HeerId(int(row[0]))
         setattr(model_instance, self.attname, new_id)
@@ -84,6 +87,7 @@ class RanjIdField(models.Field):
                 )
 
         from django.db.models.signals import class_prepared
+
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def db_type(self, connection):
@@ -105,17 +109,19 @@ class RanjIdField(models.Field):
             return value
 
         from django.db import connection
+
         from heeranjid_django.managers import _get_node_id
+
         node_id = _get_node_id()
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute(f"EXEC generate_ranjid @in_node_id = {node_id}")
+            cursor.execute("EXEC generate_ranjid @in_node_id = %s", [node_id])
             row = cursor.fetchone()
             raw = row[0]
             new_id = RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(raw))))
         else:
-            cursor.execute(f"SELECT generate_ranjid({node_id})")
+            cursor.execute("SELECT generate_ranjid(%s)", [node_id])
             row = cursor.fetchone()
             new_id = RanjId.from_str(str(row[0]))
         setattr(model_instance, self.attname, new_id)

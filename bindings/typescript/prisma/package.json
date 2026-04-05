@@ -1,0 +1,34 @@
+{
+  "name": "heeranjid-prisma",
+  "version": "0.1.0",
+  "description": "Prisma client extension for HeeRanjID distributed ID generation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "prepack": "cp -r ../../../sql ./sql",
+    "postpack": "rm -rf ./sql",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "sql/"
+  ],
+  "dependencies": {
+    "heeranjid": "file:../"
+  },
+  "peerDependencies": {
+    "@prisma/client": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.2"
+  }
+}

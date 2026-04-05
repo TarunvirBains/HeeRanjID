@@ -1,0 +1,68 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - heeranjid (crates.io)
+          - heeranjid-sqlx (crates.io)
+          - heeranjid-ffi (crates.io)
+          - heeranjid (PyPI)
+          - heeranjid-django (PyPI)
+
+jobs:
+  publish-crate:
+    if: contains(github.event.inputs.package, 'crates.io')
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1.94-slim-bookworm
+    steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PACKAGE_INPUT: ${{ github.event.inputs.package }}
+        run: |
+          CRATE=$(echo "$PACKAGE_INPUT" | cut -d' ' -f1)
+          cargo publish -p "$CRATE"
+
+  publish-pypi:
+    if: contains(github.event.inputs.package, 'PyPI')
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1.94-slim-bookworm
+    steps:
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends git python3 python3-pip python3-venv
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install maturin
+        run: pip install maturin twine --break-system-packages
+      - name: Build and publish heeranjid
+        if: contains(github.event.inputs.package, 'heeranjid (PyPI)')
+        run: |
+          cd bindings/python
+          make build
+          twine upload target/wheels/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      - name: Build and publish heeranjid-django
+        if: contains(github.event.inputs.package, 'heeranjid-django')
+        run: |
+          pip install hatchling --break-system-packages
+          cd bindings/python/django
+          python -m build
+          twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

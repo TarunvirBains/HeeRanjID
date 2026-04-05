@@ -101,20 +101,20 @@ class TestRanjIdField:
 
     def test_from_db_value_str(self):
         field = RanjIdField()
-        result = field.from_db_value("00000000-0000-7000-800f-4240006400c8", None, None)
+        result = field.from_db_value("00000000-0000-8000-8000-0000006400c8", None, None)
         assert isinstance(result, RanjId)
         assert result.node_id == 100
         assert result.sequence == 200
 
     def test_from_db_value_uuid(self):
         field = RanjIdField()
-        u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
+        u = uuid.UUID("00000000-0000-8000-8000-0000006400c8")
         result = field.from_db_value(u, None, None)
         assert isinstance(result, RanjId)
 
     def test_from_db_value_bytes(self):
         field = RanjIdField()
-        u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
+        u = uuid.UUID("00000000-0000-8000-8000-0000006400c8")
         result = field.from_db_value(u.bytes, None, None)
         assert isinstance(result, RanjId)
         assert result.node_id == 100
@@ -122,7 +122,7 @@ class TestRanjIdField:
 
     def test_from_db_value_memoryview(self):
         field = RanjIdField()
-        u = uuid.UUID("00000000-0000-7000-800f-4240006400c8")
+        u = uuid.UUID("00000000-0000-8000-8000-0000006400c8")
         mv = memoryview(u.bytes)
         result = field.from_db_value(mv, None, None)
         assert isinstance(result, RanjId)
@@ -134,7 +134,7 @@ class TestRanjIdField:
 
     def test_get_prep_value_ranjid(self):
         field = RanjIdField()
-        rid = RanjId.from_str("00000000-0000-7000-800f-4240006400c8")
+        rid = RanjId.from_str("00000000-0000-8000-8000-0000006400c8")
         result = field.get_prep_value(rid)
         assert isinstance(result, uuid.UUID)
 

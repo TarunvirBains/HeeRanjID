@@ -1,6 +1,7 @@
+using HeeRanjID;
 using Microsoft.EntityFrameworkCore;
 
-namespace HeeRanjID;
+namespace HeeRanjID.EFCore;
 
 /// <summary>
 /// Extension methods for configuring HeerId and RanjId in EF Core models.

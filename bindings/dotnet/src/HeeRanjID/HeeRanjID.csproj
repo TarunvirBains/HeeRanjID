@@ -8,10 +8,6 @@
     <IncludeSql>false</IncludeSql>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
-  </ItemGroup>
-
   <ItemGroup Condition="'$(IncludeSql)' == 'true'">
     <Content Include="..\..\..\sql\**\*.sql"
              Link="sql\%(RecursiveDir)%(Filename)%(Extension)"

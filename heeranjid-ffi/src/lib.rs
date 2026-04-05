@@ -178,18 +178,17 @@ pub unsafe extern "C" fn ranj_id_decode(
     let uuid = uuid::Uuid::from_bytes(*bytes);
     match RanjId::from_uuid(uuid) {
         Ok(rid) => {
-            let parts = rid.into_parts();
             unsafe {
                 if !timestamp_us.is_null() {
                     // RanjId timestamp can be up to 90 bits, but for practical use
                     // it fits in u64 for the foreseeable future.
-                    *timestamp_us = parts.timestamp_micros as u64;
+                    *timestamp_us = rid.timestamp_micros() as u64;
                 }
                 if !node_id.is_null() {
-                    *node_id = parts.node_id;
+                    *node_id = rid.node_id();
                 }
                 if !sequence.is_null() {
-                    *sequence = parts.sequence;
+                    *sequence = rid.sequence();
                 }
             }
             0

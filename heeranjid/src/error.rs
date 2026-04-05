@@ -10,7 +10,7 @@ pub enum Error {
     SequenceOutOfRange { value: u32, bits: u8 },
     #[error("heerid must be non-negative")]
     NegativeHeerId,
-    #[error("uuid version must be 7")]
+    #[error("uuid version must be 8 (UUIDv8)")]
     InvalidRanjIdVersion,
     #[error("uuid variant must be RFC 4122")]
     InvalidRanjIdVariant,

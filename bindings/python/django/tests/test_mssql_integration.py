@@ -230,12 +230,12 @@ class TestRanjIdMssql:
         for i in range(len(raw_bytes) - 1):
             assert raw_bytes[i] < raw_bytes[i + 1]
 
-    def test_ranjid_is_valid_uuidv7(self, cursor):
+    def test_ranjid_is_valid_uuidv8(self, cursor):
         cursor.execute("EXEC generate_ranjid @in_node_id = 1")
         raw_bytes = cursor.fetchone()[0]
         u = uuid.UUID(bytes=bytes(raw_bytes))
-        # UUIDv7: version nibble = 7
-        assert u.version == 7
+        # UUIDv8: version nibble = 8
+        assert u.version == 8
         # Variant should be RFC 4122 (0b10xx)
         assert (u.int >> 62) & 0b11 == 0b10
 

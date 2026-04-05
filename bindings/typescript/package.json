@@ -23,13 +23,5 @@
     "@napi-rs/cli": "^2",
     "vitest": "^2",
     "typescript": "^5"
-  },
-  "peerDependencies": {
-    "@prisma/client": ">=5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@prisma/client": {
-      "optional": true
-    }
   }
 }

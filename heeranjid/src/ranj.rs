@@ -1,21 +1,24 @@
 use crate::Error;
+use crate::precision::RanjPrecision;
 use crate::serde_helpers;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
 
-pub const RANJ_TIMESTAMP_BITS: u8 = 90;
-pub const RANJ_NODE_ID_BITS: u8 = 16;
+pub const RANJ_TIMESTAMP_BITS: u8 = 89;
+pub const RANJ_PRECISION_BITS: u8 = 2;
+pub const RANJ_NODE_ID_BITS: u8 = 15;
 pub const RANJ_SEQUENCE_BITS: u8 = 16;
-pub const RANJ_UUID_VERSION: u8 = 0b0111;
+pub const RANJ_UUID_VERSION: u8 = 0b1000;
 pub const RANJ_UUID_VARIANT: u8 = 0b10;
 
 const RANJ_TIMESTAMP_MASK: u128 = (1u128 << RANJ_TIMESTAMP_BITS) - 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RanjIdParts {
-    pub timestamp_micros: u128,
+    pub timestamp: u128,
+    pub precision: RanjPrecision,
     pub node_id: u16,
     pub sequence: u16,
 }
@@ -30,27 +33,39 @@ pub struct RanjId(
 );
 
 impl RanjId {
-    pub const MAX_TIMESTAMP_MICROS: u128 = RANJ_TIMESTAMP_MASK;
-    pub const MAX_NODE_ID: u16 = u16::MAX;
+    pub const MAX_TIMESTAMP: u128 = RANJ_TIMESTAMP_MASK;
+    pub const MAX_NODE_ID: u16 = (1u16 << 15) - 1;
     pub const MAX_SEQUENCE: u16 = u16::MAX;
 
-    pub fn new(timestamp_micros: u128, node_id: u16, sequence: u16) -> Result<Self, Error> {
-        if timestamp_micros > Self::MAX_TIMESTAMP_MICROS {
+    pub fn new(
+        timestamp: u128,
+        precision: RanjPrecision,
+        node_id: u16,
+        sequence: u16,
+    ) -> Result<Self, Error> {
+        if timestamp > Self::MAX_TIMESTAMP {
             return Err(Error::TimestampOutOfRange {
-                value: timestamp_micros,
+                value: timestamp,
                 bits: RANJ_TIMESTAMP_BITS,
             });
         }
+        if node_id > Self::MAX_NODE_ID {
+            return Err(Error::NodeIdOutOfRange {
+                value: u32::from(node_id),
+                bits: RANJ_NODE_ID_BITS,
+            });
+        }
 
-        let timestamp_high = (timestamp_micros >> 42) & ((1u128 << 48) - 1);
-        let timestamp_mid = (timestamp_micros >> 30) & ((1u128 << 12) - 1);
-        let timestamp_low = timestamp_micros & ((1u128 << 30) - 1);
+        let ts_high = (timestamp >> 41) & ((1u128 << 48) - 1);
+        let ts_mid = (timestamp >> 29) & ((1u128 << 12) - 1);
+        let ts_low = timestamp & ((1u128 << 29) - 1);
 
-        let raw = (timestamp_high << 80)
+        let raw = (ts_high << 80)
             | (u128::from(RANJ_UUID_VERSION) << 76)
-            | (timestamp_mid << 64)
+            | (ts_mid << 64)
             | (u128::from(RANJ_UUID_VARIANT) << 62)
-            | (timestamp_low << 32)
+            | (u128::from(precision.to_bits()) << 60)
+            | (ts_low << 31)
             | (u128::from(node_id) << 16)
             | u128::from(sequence);
 
@@ -78,19 +93,30 @@ impl RanjId {
 
     pub fn into_parts(self) -> RanjIdParts {
         let raw = self.0.as_u128();
-        let timestamp_high = (raw >> 80) & ((1u128 << 48) - 1);
-        let timestamp_mid = (raw >> 64) & ((1u128 << 12) - 1);
-        let timestamp_low = (raw >> 32) & ((1u128 << 30) - 1);
+        let ts_high = (raw >> 80) & ((1u128 << 48) - 1);
+        let ts_mid = (raw >> 64) & ((1u128 << 12) - 1);
+        let precision_bits = ((raw >> 60) & 0b11) as u8;
+        let ts_low = (raw >> 31) & ((1u128 << 29) - 1);
 
         RanjIdParts {
-            timestamp_micros: (timestamp_high << 42) | (timestamp_mid << 30) | timestamp_low,
-            node_id: ((raw >> 16) & 0xFFFF) as u16,
+            timestamp: (ts_high << 41) | (ts_mid << 29) | ts_low,
+            precision: RanjPrecision::from_bits(precision_bits).expect("valid precision bits"),
+            node_id: ((raw >> 16) & u128::from(Self::MAX_NODE_ID)) as u16,
             sequence: (raw & 0xFFFF) as u16,
         }
     }
 
+    pub fn timestamp(self) -> u128 {
+        self.into_parts().timestamp
+    }
+
+    pub fn precision(self) -> RanjPrecision {
+        self.into_parts().precision
+    }
+
     pub fn timestamp_micros(self) -> u128 {
-        self.into_parts().timestamp_micros
+        let parts = self.into_parts();
+        parts.timestamp / parts.precision.to_micros_divisor()
     }
 
     pub fn node_id(self) -> u16 {

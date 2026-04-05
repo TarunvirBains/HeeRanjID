@@ -1,7 +1,7 @@
 namespace HeeRanjID;
 
 /// <summary>
-/// A UUIDv7-based distributed ID with microsecond precision.
+/// A UUIDv8-based distributed ID with microsecond precision.
 /// Layout: timestamp_micros (90 bits across version/variant gaps) | node_id (16 bits) | sequence (16 bits).
 /// </summary>
 public readonly struct RanjId : IEquatable<RanjId>, IComparable<RanjId>, IComparable

@@ -5,9 +5,9 @@ namespace HeeRanjID.Tests;
 
 public class RanjIdTests
 {
-    // A valid UUIDv7 string (version=7, variant=RFC4122)
+    // A valid UUIDv8 string (version=8, variant=RFC4122)
     // This corresponds to RanjId with timestamp=0, node=100, seq=200
-    private const string ValidUuidString = "00000000-0000-7000-8000-0000006400c8";
+    private const string ValidUuidString = "00000000-0000-8000-8000-0000006400c8";
 
     [Fact]
     public void Parse_ValidUuid_Succeeds()
@@ -36,7 +36,7 @@ public class RanjIdTests
     [Fact]
     public void Parse_RejectsWrongVersion()
     {
-        // UUIDv4 instead of v7
+        // UUIDv4 instead of v8
         Assert.Throws<FormatException>(() =>
             RanjId.Parse("12345678-1234-4000-8000-123456789abc"));
     }
@@ -73,7 +73,7 @@ public class RanjIdTests
     [Fact]
     public void FromGuid_RejectsInvalidVersion()
     {
-        // Create a Guid with version 4, not 7
+        // Create a Guid with version 4, not 8
         var badGuid = Guid.Parse("12345678-1234-4000-8000-123456789abc");
         Assert.Throws<FormatException>(() => RanjId.FromGuid(badGuid));
     }
