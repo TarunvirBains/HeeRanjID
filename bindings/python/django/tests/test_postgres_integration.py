@@ -313,7 +313,7 @@ class TestDjangoFieldsPostgres:
             vendor = "postgresql"
 
         field = RanjIdField()
-        assert field.db_type(_FakeConn()) == "UUID"
+        assert field.db_type(_FakeConn()) == "uuid"
 
 
 # ── Concurrency ──
