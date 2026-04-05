@@ -142,6 +142,39 @@ heeranjid_django/
 - Convert A's PK: verify B and C's FK columns also converted
 - Query relationships still work after conversion
 
+## ID Prefetch Strategy
+
+The mixin supports configurable ID generation timing via `HeeRanjId.prefetch`:
+
+```python
+class MyModel(HeeRanjIdPKMixin, models.Model):
+    class HeeRanjId:
+        field_type = "heerid"
+        prefetch = "save"  # when to generate the ID
+```
+
+| Setting | Behavior | Use case |
+|---------|----------|----------|
+| `"save"` (default) | `pre_save` generates if null | Safe for loops, general purpose |
+| `"init"` | `__init__` generates immediately | Forms/views where ID is needed before save |
+| `"none"` | Never auto-generate | Manual control, use `prefetch_ids()` explicitly |
+
+### View utility: `prefetch_ids(model, count)`
+
+Batch-generates IDs for use in forms or API responses before save:
+
+```python
+from heeranjid_django import prefetch_ids
+
+ids = prefetch_ids(MyModel, 10)  # returns 10 HeerId or RanjId values
+```
+
+Works regardless of the `prefetch` setting. The `pre_save` fallback always catches objects with null IDs, so even if a prefetched ID is lost (form abandoned), the save path remains safe.
+
+### Why prefetch is safe
+
+IDs occupy a unique point in time — they're never reused. "Wasted" prefetched IDs from abandoned forms consume sequence numbers within a millisecond, but with 8,192 sequences/ms (HeerId) or 65,536/tick (RanjId), the cost is negligible.
+
 ## What's NOT in scope
 
 - Automatic detection of IDs in JSON or string columns (user must add these manually to the FK list)
