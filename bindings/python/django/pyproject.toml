@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "heeranjid-django"
+version = "0.1.0"
+description = "Django integration for HeeRanjID distributed ID generation"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "heeranjid",
+    "django>=4.2",
+]
+classifiers = [
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/heeranjid_django"]
