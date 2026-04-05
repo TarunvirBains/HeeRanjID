@@ -24,6 +24,7 @@ _lazy = {
 def __getattr__(name):
     if name in _lazy:
         import importlib
+
         module = importlib.import_module(_lazy[name])
         value = getattr(module, name)
         globals()[name] = value  # cache for subsequent access

@@ -32,13 +32,11 @@ class HeeRanjIdMeta(ModelBase):
 
             if not isinstance(field_type, HeeRanjIdFieldType):
                 raise ImproperlyConfigured(
-                    f"HeeRanjId.field_type must be a HeeRanjIdFieldType enum, "
-                    f"got {field_type!r}"
+                    f"HeeRanjId.field_type must be a HeeRanjIdFieldType enum, got {field_type!r}"
                 )
             if not isinstance(prefetch, HeeRanjIdPrefetch):
                 raise ImproperlyConfigured(
-                    f"HeeRanjId.prefetch must be a HeeRanjIdPrefetch enum, "
-                    f"got {prefetch!r}"
+                    f"HeeRanjId.prefetch must be a HeeRanjIdPrefetch enum, got {prefetch!r}"
                 )
 
             if "id" not in namespace:
