@@ -14,11 +14,11 @@ Additionally, `pre_save()` hardcodes `node_id = 1` instead of reading from Djang
 
 ### Components
 
-**`HeeRanjIdPKMixin`** — a manager mixin that adds:
+**`HeeRanjIdManagerMixin`** — a manager mixin that adds:
 - `heeranjid_bulk_create(objs, **kwargs)` — generates IDs in batch, assigns them to objects, then delegates to Django's `bulk_create()`
 - `_heeranjid_enabled = True` — marker attribute used by field enforcement
 
-**`HeeRanjIdManager`** — `HeeRanjIdPKMixin` + `models.Manager`. Drop-in for models that don't need a custom manager.
+**`HeeRanjIdManager`** — `HeeRanjIdManagerMixin` + `models.Manager`. Drop-in for models that don't need a custom manager.
 
 **Field enforcement** — both `HeerIdField` and `RanjIdField` override `contribute_to_class()`. After the field is attached to the model, it checks that the model's default manager has `_heeranjid_enabled = True`. If not, raises `django.core.exceptions.ImproperlyConfigured` with a message explaining the requirement.
 
@@ -88,7 +88,7 @@ def contribute_to_class(self, cls, name, **kwargs):
             raise ImproperlyConfigured(
                 f"Model '{cls.__name__}' has a {self.__class__.__name__} but its "
                 f"default manager does not support HeeRanjID bulk operations. "
-                f"Use HeeRanjIdManager or add HeeRanjIdPKMixin to your custom manager."
+                f"Use HeeRanjIdManager or add HeeRanjIdManagerMixin to your custom manager."
             )
     from django.db.models.signals import class_prepared
     class_prepared.connect(check_manager, sender=cls)
@@ -103,7 +103,7 @@ from heeranjid_django import (
     HeerIdField,          # 64-bit ID field
     RanjIdField,          # 128-bit UUIDv7 field
     HeeRanjIdManager,     # drop-in manager
-    HeeRanjIdPKMixin,     # mixin for custom managers
+    HeeRanjIdManagerMixin,     # mixin for custom managers
 )
 ```
 
@@ -124,9 +124,9 @@ class MyModel(models.Model):
 **Custom manager:**
 ```python
 from django.db import models
-from heeranjid_django import HeerIdField, HeeRanjIdPKMixin
+from heeranjid_django import HeerIdField, HeeRanjIdManagerMixin
 
-class MyManager(HeeRanjIdPKMixin, models.Manager):
+class MyManager(HeeRanjIdManagerMixin, models.Manager):
     def active(self):
         return self.filter(is_active=True)
 
@@ -150,9 +150,9 @@ All code in `bindings/python/django/src/heeranjid_django/`:
 
 ```
 heeranjid_django/
-  __init__.py         # exports HeerIdField, RanjIdField, HeeRanjIdManager, HeeRanjIdPKMixin
+  __init__.py         # exports HeerIdField, RanjIdField, HeeRanjIdManager, HeeRanjIdManagerMixin
   fields.py           # HeerIdField, RanjIdField (updated: contribute_to_class enforcement, pre_save uses HEERANJID_NODE_ID)
-  managers.py         # HeeRanjIdPKMixin, HeeRanjIdManager
+  managers.py         # HeeRanjIdManagerMixin, HeeRanjIdManager
   apps.py             # unchanged
   migrations/         # unchanged
 ```
@@ -162,7 +162,7 @@ heeranjid_django/
 ### Unit tests (no database):
 - `contribute_to_class` raises `ImproperlyConfigured` when model has no compliant manager
 - `contribute_to_class` passes when model uses `HeeRanjIdManager`
-- `contribute_to_class` passes when model uses a custom manager with `HeeRanjIdPKMixin`
+- `contribute_to_class` passes when model uses a custom manager with `HeeRanjIdManagerMixin`
 - `pre_save` raises `ImproperlyConfigured` when `HEERANJID_NODE_ID` is missing
 - `pre_save` reads `HEERANJID_NODE_ID` from settings
 

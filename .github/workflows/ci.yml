@@ -139,6 +139,9 @@ jobs:
           --health-retries 10
 
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -215,4 +218,4 @@ jobs:
       - name: Run tests
         run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts/target/release
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts

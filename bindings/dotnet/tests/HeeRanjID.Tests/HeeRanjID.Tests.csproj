@@ -19,4 +19,10 @@
   <ItemGroup>
     <ProjectReference Include="../../src/HeeRanjID/HeeRanjID.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../../../sql/**/*.sql"
+             Link="sql/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

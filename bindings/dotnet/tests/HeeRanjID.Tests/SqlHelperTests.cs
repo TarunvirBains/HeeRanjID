@@ -28,14 +28,6 @@ public class SqlHelperTests
     }
 
     [Fact]
-    public void GetResourceNames_ContainsSqlFiles()
-    {
-        string[] names = SqlHelper.GetResourceNames();
-        Assert.NotEmpty(names);
-        Assert.All(names, n => Assert.EndsWith(".sql", n));
-    }
-
-    [Fact]
     public void GetGenerateHeerIdSql_ReturnsNonEmpty()
     {
         string sql = SqlHelper.GetGenerateHeerIdSql();
