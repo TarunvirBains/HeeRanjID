@@ -20,5 +20,10 @@ export default defineConfig({
   ],
   test: {
     include: ["tests/**/*.test.ts"],
+    alias: {
+      // Provide a lightweight stub for the native NAPI module so shape/SQL
+      // tests can run without a compiled binary.
+      heeranjid: resolve(__dirname, "tests/__mocks__/heeranjid.ts"),
+    },
   },
 });

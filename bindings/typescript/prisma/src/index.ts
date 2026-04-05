@@ -1,4 +1,5 @@
 import { HeerId, RanjId } from "heeranjid";
+import { getInstallSQL, getSeedSQL, getConfigureSQL } from "./setup.js";
 
 /**
  * Shape expected from Prisma's `$queryRaw` for a single HeerId row.
@@ -12,6 +13,18 @@ interface HeerIdRow {
  */
 interface RanjIdRow {
   id: string;
+}
+
+/**
+ * Reads the NODE_ID environment variable and returns it as a number.
+ * Throws if the variable is not set.
+ */
+function getNodeId(): number {
+  const nodeId = process.env.NODE_ID;
+  if (!nodeId) {
+    throw new Error("NODE_ID environment variable must be set");
+  }
+  return parseInt(nodeId, 10);
 }
 
 /**
@@ -31,9 +44,10 @@ export interface HeeranjidClient {
     setRanjNodeId(nodeId: number): Promise<void>;
 
     /**
-     * Generate a single HeerId.
+     * Generate a single HeerId. Uses nodeId if provided, otherwise falls
+     * back to the NODE_ID environment variable.
      */
-    generateHeerId(nodeId: number): Promise<HeerId>;
+    generateHeerId(nodeId?: number): Promise<HeerId>;
 
     /**
      * Generate multiple HeerIds.
@@ -41,14 +55,23 @@ export interface HeeranjidClient {
     generateHeerIds(nodeId: number, count: number): Promise<HeerId[]>;
 
     /**
-     * Generate a single RanjId.
+     * Generate a single RanjId. Uses nodeId if provided, otherwise falls
+     * back to the NODE_ID environment variable.
      */
-    generateRanjId(nodeId: number): Promise<RanjId>;
+    generateRanjId(nodeId?: number): Promise<RanjId>;
 
     /**
      * Generate multiple RanjIds.
      */
     generateRanjIds(nodeId: number, count: number): Promise<RanjId[]>;
+
+    /**
+     * Install the HeeRanjID schema, functions, seed data, and call
+     * heer_configure(). Safe to call in a migration.
+     *
+     * @param backend - Database backend. Defaults to "postgres".
+     */
+    install(backend?: "postgres" | "mssql"): Promise<void>;
   };
 }
 
@@ -94,12 +117,13 @@ export function heeranjidExtension() {
           );
         },
 
-        async generateHeerId(nodeId: number): Promise<HeerId> {
+        async generateHeerId(nodeId?: number): Promise<HeerId> {
           const ctx = this as any;
           const client = ctx.$parent ?? ctx;
+          const resolvedNodeId = nodeId ?? getNodeId();
           const rows: HeerIdRow[] = await client.$queryRawUnsafe(
             `SELECT id FROM generate_ids($1, 1)`,
-            nodeId
+            resolvedNodeId
           );
           if (rows.length === 0) {
             throw new Error("generate_ids returned no rows");
@@ -121,12 +145,13 @@ export function heeranjidExtension() {
           return rows.map((row) => HeerId.fromBigInt(row.id));
         },
 
-        async generateRanjId(nodeId: number): Promise<RanjId> {
+        async generateRanjId(nodeId?: number): Promise<RanjId> {
           const ctx = this as any;
           const client = ctx.$parent ?? ctx;
+          const resolvedNodeId = nodeId ?? getNodeId();
           const rows: RanjIdRow[] = await client.$queryRawUnsafe(
             `SELECT id::text FROM generate_ranjids($1, 1)`,
-            nodeId
+            resolvedNodeId
           );
           if (rows.length === 0) {
             throw new Error("generate_ranjids returned no rows");
@@ -147,7 +172,30 @@ export function heeranjidExtension() {
           );
           return rows.map((row) => RanjId.fromString(row.id));
         },
+
+        async install(backend: "postgres" | "mssql" = "postgres"): Promise<void> {
+          const ctx = this as any;
+          const client = ctx.$parent ?? ctx;
+
+          const installSQL = getInstallSQL(backend);
+          const seedSQL = getSeedSQL(backend);
+
+          // Execute the full install SQL (schema + session + generate functions + configure function)
+          await client.$executeRawUnsafe(installSQL);
+
+          // Seed default node
+          await client.$executeRawUnsafe(seedSQL);
+
+          // Call heer_configure() to bake in epoch/precision and regenerate ID functions
+          if (backend === "mssql") {
+            await client.$executeRawUnsafe(`EXEC heer_configure`);
+          } else {
+            await client.$executeRawUnsafe(`SELECT heer_configure()`);
+          }
+        },
       },
     },
   };
 }
+
+export { getNodeId, getInstallSQL, getSeedSQL, getConfigureSQL };
