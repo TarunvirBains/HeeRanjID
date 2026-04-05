@@ -77,13 +77,11 @@ class HeeRanjIdConversion(Operation):
         while True:
             if is_mssql:
                 cursor.execute(
-                    f"SELECT TOP {self.chunk_size} id FROM {table} "
-                    f"ORDER BY id OFFSET {offset} ROWS"
+                    f"SELECT TOP {self.chunk_size} id FROM {table} ORDER BY id OFFSET {offset} ROWS"
                 )
             else:
                 cursor.execute(
-                    f"SELECT id FROM {table} ORDER BY id "
-                    f"LIMIT {self.chunk_size} OFFSET {offset}"
+                    f"SELECT id FROM {table} ORDER BY id LIMIT {self.chunk_size} OFFSET {offset}"
                 )
             rows = cursor.fetchall()
             if not rows:
@@ -109,13 +107,9 @@ class HeeRanjIdConversion(Operation):
         # 3. Convert FK columns
         for fk_table, fk_column in self.foreign_keys:
             if is_mssql:
-                cursor.execute(
-                    f"ALTER TABLE {fk_table} ADD {fk_column}_new BINARY(16)"
-                )
+                cursor.execute(f"ALTER TABLE {fk_table} ADD {fk_column}_new BINARY(16)")
             else:
-                cursor.execute(
-                    f"ALTER TABLE {fk_table} ADD COLUMN {fk_column}_new UUID"
-                )
+                cursor.execute(f"ALTER TABLE {fk_table} ADD COLUMN {fk_column}_new UUID")
 
             cursor.execute(
                 f"UPDATE {fk_table} SET {fk_column}_new = "
@@ -129,26 +123,20 @@ class HeeRanjIdConversion(Operation):
             cursor.execute(f"ALTER TABLE {fk_table} DROP COLUMN {fk_column}")
             if is_mssql:
                 cursor.execute(
-                    f"EXEC sp_rename '{fk_table}.{fk_column}_new', "
-                    f"'{fk_column}', 'COLUMN'"
+                    f"EXEC sp_rename '{fk_table}.{fk_column}_new', '{fk_column}', 'COLUMN'"
                 )
             else:
                 cursor.execute(
-                    f"ALTER TABLE {fk_table} RENAME COLUMN "
-                    f"{fk_column}_new TO {fk_column}"
+                    f"ALTER TABLE {fk_table} RENAME COLUMN {fk_column}_new TO {fk_column}"
                 )
 
         # 5. Drop old PK, rename new column, recreate PK
         self._drop_pk_constraint(cursor, table, is_mssql)
         cursor.execute(f"ALTER TABLE {table} DROP COLUMN id")
         if is_mssql:
-            cursor.execute(
-                f"EXEC sp_rename '{table}.id_new', 'id', 'COLUMN'"
-            )
+            cursor.execute(f"EXEC sp_rename '{table}.id_new', 'id', 'COLUMN'")
         else:
-            cursor.execute(
-                f"ALTER TABLE {table} RENAME COLUMN id_new TO id"
-            )
+            cursor.execute(f"ALTER TABLE {table} RENAME COLUMN id_new TO id")
         cursor.execute(f"ALTER TABLE {table} ADD PRIMARY KEY (id)")
 
         # 6. Recreate FK constraints
@@ -172,10 +160,7 @@ class HeeRanjIdConversion(Operation):
         all_rows = cursor.fetchall()
 
         if is_mssql:
-            ranj_ids = [
-                RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0]))))
-                for r in all_rows
-            ]
+            ranj_ids = [RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0])))) for r in all_rows]
         else:
             ranj_ids = [RanjId.from_str(str(r[0])) for r in all_rows]
 
@@ -205,9 +190,7 @@ class HeeRanjIdConversion(Operation):
 
         # 4. Convert FK columns
         for fk_table, fk_column in self.foreign_keys:
-            cursor.execute(
-                f"ALTER TABLE {fk_table} ADD COLUMN {fk_column}_new BIGINT"
-            )
+            cursor.execute(f"ALTER TABLE {fk_table} ADD COLUMN {fk_column}_new BIGINT")
 
             cursor.execute(
                 f"UPDATE {fk_table} SET {fk_column}_new = "
@@ -221,26 +204,20 @@ class HeeRanjIdConversion(Operation):
             cursor.execute(f"ALTER TABLE {fk_table} DROP COLUMN {fk_column}")
             if is_mssql:
                 cursor.execute(
-                    f"EXEC sp_rename '{fk_table}.{fk_column}_new', "
-                    f"'{fk_column}', 'COLUMN'"
+                    f"EXEC sp_rename '{fk_table}.{fk_column}_new', '{fk_column}', 'COLUMN'"
                 )
             else:
                 cursor.execute(
-                    f"ALTER TABLE {fk_table} RENAME COLUMN "
-                    f"{fk_column}_new TO {fk_column}"
+                    f"ALTER TABLE {fk_table} RENAME COLUMN {fk_column}_new TO {fk_column}"
                 )
 
         # 6. Drop old PK, rename new column, recreate PK
         self._drop_pk_constraint(cursor, table, is_mssql)
         cursor.execute(f"ALTER TABLE {table} DROP COLUMN id")
         if is_mssql:
-            cursor.execute(
-                f"EXEC sp_rename '{table}.id_new', 'id', 'COLUMN'"
-            )
+            cursor.execute(f"EXEC sp_rename '{table}.id_new', 'id', 'COLUMN'")
         else:
-            cursor.execute(
-                f"ALTER TABLE {table} RENAME COLUMN id_new TO id"
-            )
+            cursor.execute(f"ALTER TABLE {table} RENAME COLUMN id_new TO id")
         cursor.execute(f"ALTER TABLE {table} ADD PRIMARY KEY (id)")
 
         # 7. Recreate FK constraints
@@ -277,9 +254,7 @@ class HeeRanjIdConversion(Operation):
                 """
             )
         for (constraint_name,) in cursor.fetchall():
-            cursor.execute(
-                f"ALTER TABLE {fk_table} DROP CONSTRAINT {constraint_name}"
-            )
+            cursor.execute(f"ALTER TABLE {fk_table} DROP CONSTRAINT {constraint_name}")
 
     def _drop_pk_constraint(self, cursor, table, is_mssql):
         """Find and drop the primary key constraint on a table."""
@@ -292,9 +267,7 @@ class HeeRanjIdConversion(Operation):
                 """
             )
             for (constraint_name,) in cursor.fetchall():
-                cursor.execute(
-                    f"ALTER TABLE {table} DROP CONSTRAINT {constraint_name}"
-                )
+                cursor.execute(f"ALTER TABLE {table} DROP CONSTRAINT {constraint_name}")
         else:
             # PostgreSQL uses <table>_pkey by convention, but query to be safe
             cursor.execute(
@@ -306,9 +279,7 @@ class HeeRanjIdConversion(Operation):
                 """
             )
             for (constraint_name,) in cursor.fetchall():
-                cursor.execute(
-                    f"ALTER TABLE {table} DROP CONSTRAINT {constraint_name}"
-                )
+                cursor.execute(f"ALTER TABLE {table} DROP CONSTRAINT {constraint_name}")
 
     def describe(self):
         return f"Convert {self.model} PK: {self.direction}"
