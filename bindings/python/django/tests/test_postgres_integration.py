@@ -37,11 +37,15 @@ def pg_conn():
     for sql in [postgres.SCHEMA, postgres.SESSION, postgres.GENERATE_HEERID, postgres.GENERATE_RANJID, postgres.SEED]:
         cur.execute(sql)
 
-    # Set epoch to a known value
+    # Install heer_configure() and set epoch
+    cur.execute(postgres.CONFIGURE)
     cur.execute("""
-        INSERT INTO heer_config (id, epoch) VALUES (1, '2024-01-01T00:00:00')
-        ON CONFLICT (id) DO UPDATE SET epoch = EXCLUDED.epoch
+        INSERT INTO heer_config (id, epoch, precision) VALUES (1, '2026-01-01T00:00:00', 'us')
+        ON CONFLICT (id) DO UPDATE SET epoch = EXCLUDED.epoch, precision = EXCLUDED.precision
     """)
+
+    # Regenerate functions with baked-in epoch and new bit layout
+    cur.execute("SELECT heer_configure()")
 
     # Register node 2 for multi-node tests
     cur.execute("""
