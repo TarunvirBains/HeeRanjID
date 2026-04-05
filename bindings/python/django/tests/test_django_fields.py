@@ -14,6 +14,7 @@ if not settings.configured:
         },
         INSTALLED_APPS=["heeranjid_django"],
         DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
+        HEERANJID_NODE_ID=1,
     )
     django.setup()
 

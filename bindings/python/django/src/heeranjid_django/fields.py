@@ -1,5 +1,6 @@
 import uuid as uuid_mod
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.expressions import RawSQL
 from heeranjid import HeerId, RanjId
@@ -11,6 +12,21 @@ class HeerIdField(models.BigIntegerField):
             kwargs["db_default"] = RawSQL("generate_id()", [])
         super().__init__(*args, **kwargs)
 
+    def contribute_to_class(self, cls, name, **kwargs):
+        super().contribute_to_class(cls, name, **kwargs)
+
+        def check_manager(sender, **signal_kwargs):
+            manager = cls._default_manager
+            if manager is None or not getattr(manager, "_heeranjid_enabled", False):
+                raise ImproperlyConfigured(
+                    f"Model '{cls.__name__}' has a {self.__class__.__name__} but its "
+                    f"default manager does not support HeeRanjID bulk operations. "
+                    f"Use HeeRanjIdManager or add HeeRanjIdManagerMixin to your custom manager."
+                )
+
+        from django.db.models.signals import class_prepared
+        class_prepared.connect(check_manager, sender=cls, weak=False)
+
     def pre_save(self, model_instance, add):
         value = getattr(model_instance, self.attname, None)
         if value is not None:
@@ -19,12 +35,14 @@ class HeerIdField(models.BigIntegerField):
             return value
 
         from django.db import connection
+        from heeranjid_django.managers import _get_node_id
+        node_id = _get_node_id()
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute("EXEC generate_id @in_node_id = 1")
+            cursor.execute(f"EXEC generate_id @in_node_id = {node_id}")
         else:
-            cursor.execute("SELECT generate_id()")
+            cursor.execute(f"SELECT generate_id({node_id})")
         row = cursor.fetchone()
         new_id = HeerId(int(row[0]))
         setattr(model_instance, self.attname, new_id)
@@ -53,6 +71,21 @@ class RanjIdField(models.Field):
             kwargs["db_default"] = RawSQL("generate_ranjid()", [])
         super().__init__(*args, **kwargs)
 
+    def contribute_to_class(self, cls, name, **kwargs):
+        super().contribute_to_class(cls, name, **kwargs)
+
+        def check_manager(sender, **signal_kwargs):
+            manager = cls._default_manager
+            if manager is None or not getattr(manager, "_heeranjid_enabled", False):
+                raise ImproperlyConfigured(
+                    f"Model '{cls.__name__}' has a {self.__class__.__name__} but its "
+                    f"default manager does not support HeeRanjID bulk operations. "
+                    f"Use HeeRanjIdManager or add HeeRanjIdManagerMixin to your custom manager."
+                )
+
+        from django.db.models.signals import class_prepared
+        class_prepared.connect(check_manager, sender=cls, weak=False)
+
     def db_type(self, connection):
         if connection.vendor == "microsoft":
             return "BINARY(16)"
@@ -72,15 +105,17 @@ class RanjIdField(models.Field):
             return value
 
         from django.db import connection
+        from heeranjid_django.managers import _get_node_id
+        node_id = _get_node_id()
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute("EXEC generate_ranjid @in_node_id = 1")
+            cursor.execute(f"EXEC generate_ranjid @in_node_id = {node_id}")
             row = cursor.fetchone()
             raw = row[0]
             new_id = RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(raw))))
         else:
-            cursor.execute("SELECT generate_ranjid()")
+            cursor.execute(f"SELECT generate_ranjid({node_id})")
             row = cursor.fetchone()
             new_id = RanjId.from_str(str(row[0]))
         setattr(model_instance, self.attname, new_id)
