@@ -87,7 +87,7 @@ jobs:
 
       # Build binding artifacts
       - name: Build Python wheel
-        run: cd bindings/python && maturin build --release
+        run: cd bindings/python && make build
         env:
           PYO3_PYTHON: python3
 
