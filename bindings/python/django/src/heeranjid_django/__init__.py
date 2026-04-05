@@ -1,5 +1,5 @@
 from heeranjid_django.fields import HeerIdField, RanjIdField
-from heeranjid_django.managers import HeeRanjIdManager, HeeRanjIdManagerMixin
+from heeranjid_django.managers import HeeRanjIdManager, HeeRanjIdManagerMixin, prefetch_ids
 
 default_app_config = "heeranjid_django.apps.HeeranjidConfig"
 __all__ = [
@@ -7,6 +7,7 @@ __all__ = [
     "RanjIdField",
     "HeeRanjIdManager",
     "HeeRanjIdManagerMixin",
+    "prefetch_ids",
     "HeeRanjIdFieldType",
     "HeeRanjIdPrefetch",
     "HeeRanjIdPKMixin",

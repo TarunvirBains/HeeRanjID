@@ -48,6 +48,36 @@ def _generate_ranj_ids(count):
         return [RanjId.from_str(str(r[0])) for r in rows]
 
 
+def prefetch_ids(model, count):
+    """Pre-generate HeeRanjID values for a model.
+
+    Returns a list of HeerId or RanjId values (depending on the model's PK type)
+    that can be assigned to objects before save. Useful for forms and views where
+    the ID is needed before the object is persisted.
+
+    Pre-fetched IDs that are never saved are harmless — they occupy a unique point
+    in time that will never be reused, and the sequence cost is negligible.
+
+    Args:
+        model: A Django model class with a HeerIdField or RanjIdField PK.
+        count: Number of IDs to generate.
+
+    Returns:
+        List of HeerId or RanjId values.
+    """
+    from heeranjid_django.fields import HeerIdField, RanjIdField
+
+    pk_field = model._meta.pk
+    if isinstance(pk_field, HeerIdField):
+        return _generate_heer_ids(count)
+    elif isinstance(pk_field, RanjIdField):
+        return _generate_ranj_ids(count)
+    else:
+        raise TypeError(
+            f"Model {model.__name__} does not use HeerIdField or RanjIdField as primary key"
+        )
+
+
 class HeeRanjIdManagerMixin:
     """Mixin for Django managers that support HeeRanjID bulk operations."""
 
