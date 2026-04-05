@@ -101,7 +101,7 @@ impl RanjId {
         self.inner.timestamp_micros() as f64
     }
 
-    /// The 16-bit node identifier.
+    /// The 15-bit node identifier (max 32767).
     #[napi(getter)]
     pub fn node_id(&self) -> u16 {
         self.inner.node_id()

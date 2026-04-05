@@ -2,58 +2,40 @@ import { describe, it, expect } from "vitest";
 import { RanjId } from "../index.js";
 
 describe("RanjId", () => {
-  // We construct a known RanjId by using Rust's RanjId::new(1_000_000, 100, 200)
-  // and round-tripping through fromString. We'll use a helper to get a known UUID.
-  // Instead, let's just test the string-based API.
+  // New UUIDv8 bit layout:
+  //   bits 127-80: timestamp_high (48 bits)
+  //   bits 79-76:  version = 1000 (UUIDv8)
+  //   bits 75-64:  timestamp_mid (12 bits)
+  //   bits 63-62:  variant = 10
+  //   bits 61-60:  precision (2 bits): 00=us, 01=ns, 10=ps, 11=fs
+  //   bits 59-31:  timestamp_low (29 bits)
+  //   bits 30-16:  node_id (15 bits)
+  //   bits 15-0:   sequence (16 bits)
+  //
+  // timestamp = ts_high(48) | ts_mid(12) | ts_low(29) = 89 bits
+
+  // Helper to construct a known UUIDv8 with the new layout
+  function makeKnownId(ts: bigint, precision: bigint, node: bigint, seq: bigint): string {
+    const th = (ts >> 41n) & ((1n << 48n) - 1n);
+    const tm = (ts >> 29n) & ((1n << 12n) - 1n);
+    const tl = ts & ((1n << 29n) - 1n);
+    const raw =
+      (th << 80n) |
+      (8n << 76n) |
+      (tm << 64n) |
+      (2n << 62n) |
+      (precision << 60n) |
+      (tl << 31n) |
+      (node << 16n) |
+      seq;
+    const hex = raw.toString(16).padStart(32, "0");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
 
   describe("fromString / toUuid / toStringValue", () => {
     it("round-trips through UUID string", () => {
-      // First, create via fromString with a valid UUIDv8.
-      // We need a real UUIDv8 to test with. Let's construct one.
-      // UUIDv8 format: tttttttt-tttt-8ttt-Vxxx-xxxxxxxxxxxx
-      // For our custom layout:
-      //   bits 127-80: timestamp_high (48 bits)
-      //   bits 79-76:  version = 0111
-      //   bits 75-64:  timestamp_mid (12 bits)
-      //   bits 63-62:  variant = 10
-      //   bits 61-32:  timestamp_low (30 bits)
-      //   bits 31-16:  node_id (16 bits)
-      //   bits 15-0:   sequence (16 bits)
-      //
-      // timestamp_micros = 1_000_000, node_id = 100, sequence = 200
-      // timestamp = 1_000_000
-      // timestamp_high = (1_000_000 >> 42) & 0xFFFFFFFFFFFF = 0
-      // timestamp_mid  = (1_000_000 >> 30) & 0xFFF = 0
-      // timestamp_low  = 1_000_000 & 0x3FFFFFFF = 1_000_000
-      //
-      // raw_u128 = (0 << 80) | (7 << 76) | (0 << 64) | (2 << 62) | (1_000_000 << 32) | (100 << 16) | 200
-      //          = 0x0000_0000_0000_7000_8000_000F_4240_0064_00C8
-      // Hmm, let me compute this properly...
-      // Actually, let's just build the native binary, create an ID via Rust test,
-      // and capture the UUID. But easier: let's use Rust to print it.
-      // For now, let's just use a computation approach.
-
-      const timestamp_micros = 1_000_000n;
-      const node_id = 100n;
-      const sequence = 200n;
-
-      const timestamp_high = (timestamp_micros >> 42n) & ((1n << 48n) - 1n);
-      const timestamp_mid = (timestamp_micros >> 30n) & ((1n << 12n) - 1n);
-      const timestamp_low = timestamp_micros & ((1n << 30n) - 1n);
-
-      const raw =
-        (timestamp_high << 80n) |
-        (8n << 76n) |
-        (timestamp_mid << 64n) |
-        (2n << 62n) |
-        (timestamp_low << 32n) |
-        (node_id << 16n) |
-        sequence;
-
-      // Convert to UUID string format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-      const hex = raw.toString(16).padStart(32, "0");
-      const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-
+      // timestamp=1_000_000, precision=us(0), node=100, seq=200
+      const uuid = makeKnownId(1_000_000n, 0n, 100n, 200n);
       const id = RanjId.fromString(uuid);
       expect(id.toUuid()).toBe(uuid);
       expect(id.toStringValue()).toBe(uuid);
@@ -70,53 +52,57 @@ describe("RanjId", () => {
   });
 
   describe("field getters", () => {
-    // Build a known UUIDv8
-    function makeKnownId(ts: bigint, node: bigint, seq: bigint): string {
-      const th = (ts >> 42n) & ((1n << 48n) - 1n);
-      const tm = (ts >> 30n) & ((1n << 12n) - 1n);
-      const tl = ts & ((1n << 30n) - 1n);
-      const raw =
-        (th << 80n) |
-        (8n << 76n) |
-        (tm << 64n) |
-        (2n << 62n) |
-        (tl << 32n) |
-        (node << 16n) |
-        seq;
-      const hex = raw.toString(16).padStart(32, "0");
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-    }
-
     it("extracts timestamp_micros", () => {
-      const uuid = makeKnownId(1_234_567_890_123n, 513n, 4096n);
+      // timestamp=1_234_567_890_123 in microseconds (precision=us=0)
+      const uuid = makeKnownId(1_234_567_890_123n, 0n, 100n, 4096n);
       const id = RanjId.fromString(uuid);
       expect(id.timestampMicros).toBe(1_234_567_890_123);
     });
 
     it("extracts node_id", () => {
-      const uuid = makeKnownId(1_234_567_890_123n, 513n, 4096n);
+      // node_id=100 (fits in 15 bits, max 32767)
+      const uuid = makeKnownId(1_234_567_890_123n, 0n, 100n, 4096n);
       const id = RanjId.fromString(uuid);
-      expect(id.nodeId).toBe(513);
+      expect(id.nodeId).toBe(100);
     });
 
     it("extracts sequence", () => {
-      const uuid = makeKnownId(1_234_567_890_123n, 513n, 4096n);
+      const uuid = makeKnownId(1_234_567_890_123n, 0n, 100n, 4096n);
       const id = RanjId.fromString(uuid);
       expect(id.sequence).toBe(4096);
+    });
+
+    it("extracts max node_id (32767)", () => {
+      const uuid = makeKnownId(1_000_000n, 0n, 32767n, 0n);
+      const id = RanjId.fromString(uuid);
+      expect(id.nodeId).toBe(32767);
     });
   });
 
   describe("zero value", () => {
     it("round-trips zero fields", () => {
-      // timestamp=0, node=0, seq=0
-      // raw = (8 << 76) | (2 << 62)
-      const raw = (8n << 76n) | (2n << 62n);
-      const hex = raw.toString(16).padStart(32, "0");
-      const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+      // timestamp=0, precision=us(0), node=0, seq=0
+      const uuid = makeKnownId(0n, 0n, 0n, 0n);
       const id = RanjId.fromString(uuid);
       expect(id.timestampMicros).toBe(0);
       expect(id.nodeId).toBe(0);
       expect(id.sequence).toBe(0);
+    });
+  });
+
+  describe("precision values", () => {
+    it("microsecond precision produces correct UUID", () => {
+      const uuid = makeKnownId(1000n, 0n, 1n, 0n);
+      const id = RanjId.fromString(uuid);
+      expect(id.timestampMicros).toBe(1000);
+    });
+
+    it("nanosecond precision produces correct UUID", () => {
+      // 1000 nanoseconds = 1 microsecond
+      const uuid = makeKnownId(1000n, 1n, 1n, 0n);
+      const id = RanjId.fromString(uuid);
+      // timestamp_micros should convert: 1000ns / 1000 = 1us
+      expect(id.timestampMicros).toBe(1);
     });
   });
 });
