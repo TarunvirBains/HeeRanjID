@@ -1,4 +1,4 @@
-# HeeRanjId Specification v2.0
+# HeeRanjId Specification v1.0
 
 ## 1. Overview
 
