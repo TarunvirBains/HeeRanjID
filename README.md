@@ -1,15 +1,152 @@
-# HeeRanjId Specification v1.0
+# HeeRanjID
 
-## 1. Overview
+HeeRanjID is a cross-language, database-aware implementation of Snowflake-style IDs.
 
-**HeerId** and **RanjId** are time-ordered, deterministic identifiers designed to avoid the randomness of UUID while providing database-native sortability and distributed uniqueness. Collectively known as the **HeeRanjId** suite, they provide:
+It provides time-ordered 64-bit identifiers for efficient storage and indexing, along with a UUID-compatible representation for interoperability across systems.
 
-- **HeerId (64-bit):** A Snowflake-like ID modified for immediate implementation in non-distributed cases. Default primary key for standard entities (Postgres `BIGINT`). No coordination service needed — works out of the box with a single node and scales to 512 nodes without schema changes.
-- **RanjId (128-bit, UUIDv8):** High-precision key with self-describing timestamp precision — from microseconds for web apps to femtoseconds for particle physics and scientific instrumentation. Stored as a standard `UUID` in any database.
-- **Configurable Precision:** RanjId supports microsecond, nanosecond, picosecond, and femtosecond timestamp precision, encoded directly in each ID. No external configuration needed to interpret an ID's timestamp.
-- **Deterministic Sortability:** Database-native ordering for both variants. No random bits — every bit is meaningful.
-- **High write throughput:** 8,192 IDs/ms/node (HeerId) and 65,536 IDs/tick/node (RanjId) — most likely never your bottleneck.
-- **Physics use cases:** RanjId's femtosecond precision and 89-bit timestamp support timestamping events in particle physics experiments, laser instrumentation, and high-energy physics — anywhere sub-microsecond precision matters.
+---
+
+## Why HeeRanjID?
+
+Traditional Snowflake implementations are often:
+
+* Tied to a single language or runtime
+* Generated only at the application level
+* Difficult to standardize across multiple systems
+
+HeeRanjID takes a different approach:
+
+* Defines a consistent ID format across languages
+* Supports database-backed ID generation
+* Provides a compact, time-ordered 64-bit ID for internal use
+* Provides a UUID-compatible format for external use
+
+This allows systems to use efficient IDs internally while exposing portable identifiers externally.
+
+---
+
+## ID Formats
+
+HeeRanjID provides two interoperable identifier formats:
+
+### HeerId (64-bit)
+
+* Time-ordered 64-bit integer
+* Compact and efficient for database storage
+* Optimized for indexing and performance
+* Designed for internal system use
+
+---
+
+### RanjId (128-bit)
+
+* UUID-compatible 128-bit identifier
+* Suitable for APIs and cross-system communication
+* Globally unique and portable
+* Can be derived from HeerId (with constraints)
+
+---
+
+### Why two formats?
+
+HeerId is optimized for performance and storage inside a system.
+
+RanjId provides a standard, portable representation when IDs need to be shared externally.
+
+Both formats represent the same underlying identity and can be converted between each other when possible.
+
+> Note: Conversion between formats may be constrained depending on the information preserved in each representation.
+
+---
+
+## How it fits together
+
+```
+          +------------------+
+          |   Application    |
+          +------------------+
+             |          |
+     HeerId (64-bit)   RanjId (UUID)
+             |          |
+             +----+-----+
+                  |
+        +----------------------+
+        |   HeeRanjID Core     |
+        +----------------------+
+                  |
+        +----------------------+
+        |   Database (Postgres)|
+        +----------------------+
+```
+
+---
+
+## Repository Structure
+
+### Core
+
+* `heeranjid/` — Rust implementation of HeerId and RanjId
+* `heeranjid-sqlx/` — PostgreSQL integration and ID generation
+* `heeranjid-ffi/` — C FFI bindings
+
+---
+
+### Integrations
+
+* `bindings/python/django/` — Django integration
+* `bindings/typescript/` — TypeScript / Prisma integration
+* `.NET` — C# integration
+
+Each integration has its own README with usage details.
+
+---
+
+## Database-backed generation
+
+HeeRanjID supports generating IDs at the database level.
+
+This enables:
+
+* Consistent ID generation across services
+* Efficient batch allocation for bulk operations
+* Reduced coordination overhead in distributed systems
+
+---
+
+## Quick Example (Rust)
+
+```rust
+use heeranjid::HeerId;
+
+// Example usage (details depend on configuration)
+let id = HeerId::generate(...);
+```
+
+---
+
+## Integrations
+
+HeeRanjID is designed to be used across multiple ecosystems:
+
+* Django → see `bindings/python/django/`
+* TypeScript / Prisma → see `bindings/typescript/`
+* .NET → see `.NET/`
+* C (FFI) → see `heeranjid-ffi/`
+
+---
+
+## Status
+
+This is an actively developed project.
+
+The core Rust implementation and database integration are the most complete.
+Language-specific integrations may vary in maturity.
+
+---
+
+## Documentation
+
+Detailed format specifications and design notes are available in the `docs/` directory.
 - **Distributed System Compatibility:** Zero migration path from single-node to multi-node systems.
 - **Cross-Stack Compatibility:** Seamless use in **Rust**, **Python (Django)**, **TypeScript (Prisma)**, and **C# (.NET)**.
 
