@@ -1,9 +1,10 @@
 import uuid as uuid_mod
 
-from django.db import connection, migrations
+from django.db import connection
+from django.db.migrations.operations.base import Operation
 
 
-class HeeRanjIdConversion(migrations.Operation):
+class HeeRanjIdConversion(Operation):
     """
     Converts a model's primary key between HeerId (BIGINT) and RanjId (UUID),
     including all foreign key columns that reference it.
