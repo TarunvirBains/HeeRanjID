@@ -29,17 +29,9 @@ def pg_conn():
     cur = conn.cursor()
 
     # Install schema and functions
-    from importlib import resources
-
-    sql_dir = resources.files("heeranjid.sql").joinpath("postgres")
-    for filename in [
-        "schema.sql",
-        "session.sql",
-        "generate_heerid.sql",
-        "generate_ranjid.sql",
-        "seed.sql",
-    ]:
-        cur.execute(sql_dir.joinpath(filename).read_text(encoding="utf-8"))
+    from heeranjid.sql import postgres
+    for sql in [postgres.SCHEMA, postgres.SESSION, postgres.GENERATE_HEERID, postgres.GENERATE_RANJID, postgres.SEED]:
+        cur.execute(sql)
 
     # Set epoch to a known value
     cur.execute("""

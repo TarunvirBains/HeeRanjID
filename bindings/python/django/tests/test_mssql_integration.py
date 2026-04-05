@@ -40,17 +40,8 @@ def mssql_conn():
     cur.execute("USE heeranjid_test")
 
     # Install schema and procedures
-    from importlib import resources
-
-    sql_dir = resources.files("heeranjid.sql").joinpath("mssql")
-    for filename in [
-        "schema.sql",
-        "session.sql",
-        "generate_heerid.sql",
-        "generate_ranjid.sql",
-        "seed.sql",
-    ]:
-        sql = sql_dir.joinpath(filename).read_text(encoding="utf-8")
+    from heeranjid.sql import mssql
+    for sql in [mssql.SCHEMA, mssql.SESSION, mssql.GENERATE_HEERID, mssql.GENERATE_RANJID, mssql.SEED]:
         for batch in sql.split("\nGO\n"):
             batch = batch.strip()
             if batch and batch != "GO":
@@ -305,7 +296,7 @@ class TestDjangoFieldsMssql:
 
     def test_heerid_field_from_db_value(self, cursor):
         """HeerIdField.from_db_value works with MSSQL integer results."""
-        from heeranjid.django.fields import HeerIdField
+        from heeranjid_django.fields import HeerIdField
 
         cursor.execute("EXEC generate_id @in_node_id = 1")
         raw = cursor.fetchone()[0]
@@ -318,7 +309,7 @@ class TestDjangoFieldsMssql:
 
     def test_heerid_field_prep_roundtrip(self, cursor):
         """HeerId survives get_prep_value -> from_db_value roundtrip."""
-        from heeranjid.django.fields import HeerIdField
+        from heeranjid_django.fields import HeerIdField
 
         cursor.execute("EXEC generate_id @in_node_id = 1")
         raw = cursor.fetchone()[0]
@@ -332,7 +323,7 @@ class TestDjangoFieldsMssql:
 
     def test_ranjid_field_from_db_value_bytes(self, cursor):
         """RanjIdField.from_db_value works with MSSQL BINARY(16) bytes."""
-        from heeranjid.django.fields import RanjIdField
+        from heeranjid_django.fields import RanjIdField
 
         cursor.execute("EXEC generate_ranjid @in_node_id = 1")
         raw_bytes = cursor.fetchone()[0]
@@ -345,7 +336,7 @@ class TestDjangoFieldsMssql:
 
     def test_ranjid_field_from_db_value_memoryview(self, cursor):
         """RanjIdField.from_db_value works with memoryview (pyodbc returns this)."""
-        from heeranjid.django.fields import RanjIdField
+        from heeranjid_django.fields import RanjIdField
 
         cursor.execute("EXEC generate_ranjid @in_node_id = 1")
         raw_bytes = cursor.fetchone()[0]
@@ -358,7 +349,7 @@ class TestDjangoFieldsMssql:
 
     def test_ranjid_field_prep_roundtrip(self, cursor):
         """RanjId survives get_prep_value -> from_db_value roundtrip."""
-        from heeranjid.django.fields import RanjIdField
+        from heeranjid_django.fields import RanjIdField
 
         cursor.execute("EXEC generate_ranjid @in_node_id = 1")
         raw_bytes = cursor.fetchone()[0]
@@ -375,7 +366,7 @@ class TestDjangoFieldsMssql:
 
     def test_ranjid_field_db_type_mssql(self, cursor):
         """RanjIdField returns BINARY(16) for MSSQL vendor."""
-        from heeranjid.django.fields import RanjIdField
+        from heeranjid_django.fields import RanjIdField
 
         class _FakeConn:
             vendor = "microsoft"

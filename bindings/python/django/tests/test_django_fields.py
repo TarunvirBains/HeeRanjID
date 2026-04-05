@@ -12,14 +12,14 @@ if not settings.configured:
                 "NAME": ":memory:",
             }
         },
-        INSTALLED_APPS=[],
+        INSTALLED_APPS=["heeranjid_django"],
         DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
     )
     django.setup()
 
 import pytest
 from heeranjid import HeerId, RanjId
-from heeranjid.django.fields import HeerIdField, RanjIdField
+from heeranjid_django.fields import HeerIdField, RanjIdField
 
 
 # ── HeerIdField ──
@@ -66,7 +66,7 @@ class TestHeerIdField:
         field = HeerIdField()
         field.set_attributes_from_name("test_field")
         _name, path, _args, _kwargs = field.deconstruct()
-        assert path == "heeranjid.django.fields.HeerIdField"
+        assert path == "heeranjid_django.fields.HeerIdField"
 
 
 # ── RanjIdField ──
@@ -145,4 +145,4 @@ class TestRanjIdField:
         field = RanjIdField()
         field.set_attributes_from_name("test_field")
         _name, path, _args, _kwargs = field.deconstruct()
-        assert path == "heeranjid.django.fields.RanjIdField"
+        assert path == "heeranjid_django.fields.RanjIdField"
