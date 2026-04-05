@@ -198,7 +198,7 @@ jobs:
           pip-audit --skip-editable
 
       - name: License check
-        run: pip-licenses --fail-only --deny-only="GPL-3.0;GPL-3.0-only;GPL-2.0;GPL-2.0-only;AGPL-3.0;AGPL-3.0-only;SSPL-1.0;BSL-1.1;BUSL-1.1"
+        run: pip-licenses --partial-match --fail-on="GPL-3;GPL-2;AGPL;SSPL;BUSL"
 
       - name: Run core tests
         run: pytest bindings/python/tests/ -v
