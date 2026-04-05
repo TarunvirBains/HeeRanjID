@@ -108,7 +108,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: typescript-native
-          path: bindings/typescript/heeranjid.*.node
+          path: |
+            bindings/typescript/heeranjid.*.node
+            bindings/typescript/index.js
+            bindings/typescript/index.d.ts
 
       - name: Upload FFI artifacts
         uses: actions/upload-artifact@v4
