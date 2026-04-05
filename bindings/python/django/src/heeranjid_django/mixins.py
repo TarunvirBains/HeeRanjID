@@ -26,7 +26,9 @@ class HeeRanjIdMeta(ModelBase):
                     config = c
                     break
 
-        if config is not None and not is_abstract:
+        is_proxy = getattr(namespace.get("Meta"), "proxy", False)
+
+        if config is not None and not is_abstract and not is_proxy:
             field_type = getattr(config, "field_type", HeeRanjIdFieldType.HEERID)
             prefetch = getattr(config, "prefetch", HeeRanjIdPrefetch.SAVE)
 
