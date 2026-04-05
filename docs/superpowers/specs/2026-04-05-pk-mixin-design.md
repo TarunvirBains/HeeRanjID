@@ -25,15 +25,17 @@ class Customer(HeeRanjIdPKMixin, models.Model):
 
 **128-bit RanjId:**
 ```python
+from heeranjid_django import HeeRanjIdPKMixin, HeeRanjIdFieldType
+
 class Customer(HeeRanjIdPKMixin, models.Model):
     name = models.CharField(max_length=100)
 
     class HeeRanjId:
-        field_type = "ranjid"  # default: "heerid"
+        field_type = HeeRanjIdFieldType.RANJID
 ```
 
 **Switching from HeerId to RanjId:**
-1. Change `field_type = "ranjid"` in the model's `HeeRanjId` inner class
+1. Change `field_type = HeeRanjIdFieldType.RANJID` in the model's `HeeRanjId` inner class
 2. Run `manage.py makemigrations` — auto-detects the field change, discovers FKs, generates a `HeeRanjIdConversion` migration operation
 3. Review the generated migration, add any FK references the auto-detection missed
 4. Run `manage.py migrate` — runs pre-flight overflow check, then converts all IDs
@@ -147,17 +149,32 @@ heeranjid_django/
 The mixin supports configurable ID generation timing via `HeeRanjId.prefetch`:
 
 ```python
+from heeranjid_django import HeeRanjIdPKMixin, HeeRanjIdFieldType, HeeRanjIdPrefetch
+
 class MyModel(HeeRanjIdPKMixin, models.Model):
     class HeeRanjId:
-        field_type = "heerid"
-        prefetch = "save"  # when to generate the ID
+        field_type = HeeRanjIdFieldType.HEERID
+        prefetch = HeeRanjIdPrefetch.SAVE
+```
+
+### Enum types
+
+```python
+class HeeRanjIdFieldType(Enum):
+    HEERID = "heerid"
+    RANJID = "ranjid"
+
+class HeeRanjIdPrefetch(Enum):
+    SAVE = "save"   # generate on pre_save if null (default)
+    INIT = "init"   # generate on __init__ (eager)
+    MANUAL = None   # never auto-generate (use prefetch_ids() explicitly)
 ```
 
 | Setting | Behavior | Use case |
 |---------|----------|----------|
-| `"save"` (default) | `pre_save` generates if null | Safe for loops, general purpose |
-| `"init"` | `__init__` generates immediately | Forms/views where ID is needed before save |
-| `"none"` | Never auto-generate | Manual control, use `prefetch_ids()` explicitly |
+| `SAVE` (default) | `pre_save` generates if null | Safe for loops, general purpose |
+| `INIT` | `__init__` generates immediately | Forms/views where ID is needed before save |
+| `MANUAL` (`None`) | Never auto-generate | Manual control, use `prefetch_ids()` explicitly |
 
 ### View utility: `prefetch_ids(model, count)`
 
