@@ -6,21 +6,25 @@
 2. Make RanjId timestamp precision configurable (microseconds, nanoseconds, picoseconds, femtoseconds)
 3. Add batch conversion functions between HeerId and RanjId
 
-## RanjId → UUIDv8
+## RanjId → UUIDv8 with Self-Describing Precision
 
-RanjId uses a custom bit layout that doesn't conform to UUIDv7's requirement of a 48-bit millisecond Unix timestamp in the high bits. The version nibble changes from `0111` (v7) to `1000` (v8).
+RanjId uses a custom bit layout that doesn't conform to UUIDv7's requirement of a 48-bit millisecond Unix timestamp in the high bits. The version nibble changes from `0111` (v7) to `1000` (v8), which is RFC 9562's designated catch-all for custom UUID formats.
+
+Additionally, 2 bits are repurposed (1 from timestamp, 1 from node_id) to encode the timestamp precision directly in the UUID. This makes every RanjId self-describing — no external configuration needed to interpret it.
+
+**What changes from current layout:**
+- Version nibble: `0111` (v7) → `1000` (v8)
+- Timestamp: 90 bits → 89 bits (1 bit given to precision field)
+- Node ID: 16 bits → 15 bits (1 bit given to precision field)
+- New 2-bit precision field: `00`=μs, `01`=ns, `10`=ps, `11`=fs
+- `RANJ_UUID_VERSION` constant: `0b0111` → `0b1000`
 
 **What stays the same:**
 - 128-bit value stored as UUID
 - Variant bits `10` (RFC 4122)
-- Sort order preserved (higher timestamp = higher UUID)
+- Sort order preserved within same precision
 - Postgres `uuid`, MSSQL `UNIQUEIDENTIFIER`, Python `uuid.UUID`, Rust `uuid::Uuid` — all accept v8 without issue
-- Same 90-bit timestamp / 16-bit node / 16-bit sequence layout
-
-**What changes:**
-- Version nibble: `0111` → `1000`
-- `RanjId::from_uuid` validates version == 8 instead of 7
-- `RANJ_UUID_VERSION` constant: `0b0111` → `0b1000`
+- 16-bit sequence unchanged
 
 This is not a breaking change — nothing is deployed.
 
@@ -28,14 +32,16 @@ This is not a breaking change — nothing is deployed.
 
 The 90-bit timestamp field can represent different precisions:
 
-| Precision | Unit | 90-bit range | Use case |
+| Precision | Bits | 89-bit range | Use case |
 |-----------|------|-------------|----------|
-| Microseconds (μs) | 10⁻⁶ s | ~39.2 trillion years | Web apps, databases (default) |
-| Nanoseconds (ns) | 10⁻⁹ s | ~39.2 billion years | High-frequency systems |
-| Picoseconds (ps) | 10⁻¹² s | ~39.2 million years | Instrumentation, telecom |
-| Femtoseconds (fs) | 10⁻¹⁵ s | ~39,240 years | Particle physics, laser experiments |
+| Microseconds (μs) | `00` | ~19.6 trillion years | Web apps, databases (default) |
+| Nanoseconds (ns) | `01` | ~19.6 billion years | High-frequency systems |
+| Picoseconds (ps) | `10` | ~19.6 million years | Instrumentation, telecom |
+| Femtoseconds (fs) | `11` | ~19,620 years | Particle physics, laser experiments |
 
-The precision is set once at process startup via environment variable `RANJID_PRECISION`, cached as a static. No per-ID query. Default: `us` (microseconds, backward compatible).
+The precision is encoded in the UUID itself (2-bit field), making every RanjId self-describing. No external configuration needed to interpret an ID's timestamp.
+
+For ID **generation**, the precision is set once at process startup via environment variable `RANJID_PRECISION`, cached as a static. Default: `us` (microseconds).
 
 ```
 RANJID_PRECISION=us   # microseconds (default)
@@ -47,15 +53,17 @@ RANJID_PRECISION=fs   # femtoseconds
 **In Rust:**
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum RanjPrecision {
-    Microseconds,  // 10^-6
-    Nanoseconds,   // 10^-9
-    Picoseconds,   // 10^-12
-    Femtoseconds,  // 10^-15
+    Microseconds = 0b00,
+    Nanoseconds  = 0b01,
+    Picoseconds  = 0b10,
+    Femtoseconds = 0b11,
 }
 
 impl RanjPrecision {
-    pub fn divisor(&self) -> u128 {
+    /// Multiplier to convert from microseconds to this precision's unit
+    pub fn from_micros_multiplier(&self) -> u128 {
         match self {
             Self::Microseconds => 1,
             Self::Nanoseconds => 1_000,
@@ -66,11 +74,11 @@ impl RanjPrecision {
 }
 ```
 
-The precision is read from `RANJID_PRECISION` at first use and cached in a `OnceLock<RanjPrecision>`. The `RanjId::new()` function uses the cached precision to interpret the timestamp parameter. `RanjId::into_parts()` uses it to report the timestamp in the configured unit.
+The precision for **generation** is read from `RANJID_PRECISION` at first use and cached in a `OnceLock<RanjPrecision>`. The precision for **decoding** is read from the 2-bit field in the UUID itself — so `into_parts()` always returns the correct unit regardless of what the current process is configured to generate.
 
-**Important:** Two processes with different precisions will generate incompatible RanjIds. The precision is a deployment-level decision, not a per-ID attribute. A deployment must use one precision consistently. The 90 bits of timestamp don't encode which precision was used — that's known from configuration.
+**Cross-precision sort order:** Within the same precision, sort order is correct (higher timestamp = higher UUID). Across precisions, IDs may not sort chronologically since the precision bits sit between variant and timestamp-low bits. A deployment should use one precision consistently per table.
 
-**SQL functions:** The Postgres/MSSQL generation functions use `clock_timestamp()` / `SYSUTCDATETIME()` which provide microsecond / 100-nanosecond precision respectively. For finer precisions (ps, fs), the SQL functions would need to be extended or the IDs generated in application code rather than SQL. This is documented as a limitation — SQL-based generation supports microseconds and nanoseconds only.
+**SQL functions:** Postgres `clock_timestamp()` provides microsecond precision. MSSQL `SYSUTCDATETIME()` provides 100-nanosecond precision. For picosecond/femtosecond generation, IDs must be generated in application code (Rust), not SQL. SQL-based generation supports microseconds and nanoseconds only.
 
 ## Problem: HeerId ↔ RanjId Conversion
 
@@ -90,9 +98,10 @@ HeerId (i64, 63 usable bits):
   Max sequence: 8,191
 
 RanjId (u128 as UUIDv8):
-  [48-bit ts_high][4-bit version=1000][12-bit ts_mid][2-bit variant=10][30-bit ts_low][16-bit node_id][16-bit sequence]
-  Timestamp is 90 bits in configured precision, split across ts_high(48) | ts_mid(12) | ts_low(30)
-  Max node_id: 65,535
+  [48-bit ts_high][4-bit version=1000][12-bit ts_mid][2-bit variant=10][2-bit precision][29-bit ts_low][15-bit node_id][16-bit sequence]
+  Timestamp: ts_high(48) | ts_mid(12) | ts_low(29) = 89 bits in self-described precision
+  Precision: 00=μs, 01=ns, 10=ps, 11=fs (encoded in UUID, self-describing)
+  Max node_id: 32,767
   Max sequence: 65,535
 ```
 
@@ -102,7 +111,7 @@ Always succeeds. Every HeerId value fits in a RanjId.
 
 **Mapping per ID (precision-aware):**
 - `timestamp = timestamp_ms * precision.divisor() / 1000` — converts ms to the target precision. For microseconds: `* 1000`. For nanoseconds: `* 1_000_000`. For femtoseconds: `* 1_000_000_000_000`.
-- `node_id` — direct copy, zero-extended (9-bit → 16-bit)
+- `node_id` — direct copy, zero-extended (9-bit → 15-bit, always fits)
 - `sequence` — direct copy, zero-extended (13-bit → 16-bit)
 
 ```rust
@@ -113,7 +122,7 @@ impl HeerId {
 
     pub fn batch_to_ranjids(ids: &[HeerId]) -> Vec<(HeerId, RanjId)> {
         let precision = RanjPrecision::current();
-        let factor = precision.divisor() / 1000; // ms → target precision
+        let factor = precision.from_micros_multiplier() * 1000; // ms → target precision
         ids.iter()
             .map(|hid| {
                 let parts = hid.into_parts();
@@ -140,7 +149,7 @@ Can fail. Requires batch-level analysis to handle timestamp squashing.
    - `node_id` — unchanged (must be ≤ 511)
 
 2. Check per-ID hard failures:
-   - `node_id > 511` → `NodeIdOverflow`
+   - `node_id > 511` → `NodeIdOverflow` (RanjId allows 15-bit / max 32,767; HeerId allows 9-bit / max 511)
    - `timestamp_ms > 2^41 - 1` → `TimestampOverflow`
 
 3. Group by `(timestamp_ms, node_id)`
