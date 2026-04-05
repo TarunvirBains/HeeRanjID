@@ -262,7 +262,10 @@ jobs:
           name: ffi-linux-x64
           path: ffi-artifacts/
 
+      - name: Debug FFI artifacts
+        run: find ffi-artifacts/ -type f && ls -la ffi-artifacts/
+
       - name: Run tests
         run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts:${{ github.workspace }}/ffi-artifacts/ffi-out
