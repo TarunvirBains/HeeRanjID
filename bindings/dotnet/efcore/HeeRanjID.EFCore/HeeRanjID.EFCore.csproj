@@ -6,6 +6,11 @@
     <RootNamespace>HeeRanjID.EFCore</RootNamespace>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <Description>Entity Framework Core integration for HeeRanjID distributed ID generation</Description>
+    <RepositoryUrl>https://github.com/TarunvirBains/HeeRanjID</RepositoryUrl>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
   </ItemGroup>
