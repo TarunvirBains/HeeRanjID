@@ -181,6 +181,7 @@ One test file that runs against whichever backend is available (`DATABASE_URL` f
 
 ## What's NOT in scope
 
+- `HeeRanjIdPKMixin` model mixin (separate spec — auto-sets field + manager, Meta-based field type selection, HeerId↔RanjId migration with Rust conversion logic)
 - Overriding Django's built-in `bulk_create` (users call `heeranjid_bulk_create` explicitly)
 - `bulk_update` support (IDs are immutable after creation)
 - Multi-node support within a single Django process (one `HEERANJID_NODE_ID` per process)
