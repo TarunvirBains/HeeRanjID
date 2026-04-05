@@ -197,7 +197,6 @@ class TestRanjIdPostgres:
         for i in range(len(ids) - 1):
             assert ids[i] < ids[i + 1]
 
-    @pytest.mark.skip(reason="SQL functions still generate UUIDv7, pending heer_configure() update")
     def test_ranjid_is_valid_uuidv8(self, cursor):
         cursor.execute("SELECT generate_ranjid(1)")
         raw = cursor.fetchone()[0]

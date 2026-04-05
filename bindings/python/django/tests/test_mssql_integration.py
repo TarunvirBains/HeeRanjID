@@ -230,7 +230,6 @@ class TestRanjIdMssql:
         for i in range(len(raw_bytes) - 1):
             assert raw_bytes[i] < raw_bytes[i + 1]
 
-    @pytest.mark.skip(reason="SQL functions still generate UUIDv7, pending heer_configure() update")
     def test_ranjid_is_valid_uuidv8(self, cursor):
         cursor.execute("EXEC generate_ranjid @in_node_id = 1")
         raw_bytes = cursor.fetchone()[0]
