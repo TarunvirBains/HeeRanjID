@@ -181,6 +181,23 @@ jobs:
           pip install -e bindings/python/django/
           pip install pytest django psycopg2-binary pyodbc
 
+      - name: Install lint tools
+        run: pip install ruff mypy pip-audit pip-licenses
+
+      - name: Ruff check
+        run: |
+          ruff check bindings/python/python/ bindings/python/django/src/
+          ruff format --check bindings/python/python/ bindings/python/django/src/
+
+      - name: Type check
+        run: mypy bindings/python/python/heeranjid/ --ignore-missing-imports
+
+      - name: Security audit
+        run: pip-audit
+
+      - name: License check
+        run: pip-licenses --allow-only="MIT;BSD-3-Clause;BSD-2-Clause;Apache-2.0;PSF-2.0;LGPL-2.1-or-later;ISC;Python-2.0;MPL-2.0"
+
       - name: Run core tests
         run: pytest bindings/python/tests/ -v
 

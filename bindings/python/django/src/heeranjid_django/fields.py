@@ -25,6 +25,7 @@ class HeerIdField(models.BigIntegerField):
                 )
 
         from django.db.models.signals import class_prepared
+
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def pre_save(self, model_instance, add):
@@ -35,7 +36,9 @@ class HeerIdField(models.BigIntegerField):
             return value
 
         from django.db import connection
+
         from heeranjid_django.managers import _get_node_id
+
         node_id = _get_node_id()
 
         cursor = connection.cursor()
@@ -84,6 +87,7 @@ class RanjIdField(models.Field):
                 )
 
         from django.db.models.signals import class_prepared
+
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def db_type(self, connection):
@@ -105,7 +109,9 @@ class RanjIdField(models.Field):
             return value
 
         from django.db import connection
+
         from heeranjid_django.managers import _get_node_id
+
         node_id = _get_node_id()
 
         cursor = connection.cursor()

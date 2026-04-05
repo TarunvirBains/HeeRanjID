@@ -1,4 +1,5 @@
 """Install HeeRanjID schema and functions/procedures."""
+
 from django.db import migrations
 
 
@@ -7,8 +8,10 @@ def _get_sql_module(schema_editor):
     vendor = schema_editor.connection.vendor
     if vendor == "microsoft":
         from heeranjid.sql import mssql
+
         return mssql
     from heeranjid.sql import postgres
+
     return postgres
 
 

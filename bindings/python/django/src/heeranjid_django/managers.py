@@ -2,7 +2,6 @@ import uuid as uuid_mod
 
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models
-
 from heeranjid import HeerId, RanjId
 
 
@@ -24,10 +23,7 @@ def _generate_heer_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute(
-            f"EXEC generate_ids @in_node_id = {node_id}, "
-            f"@requested_count = {count}"
-        )
+        cursor.execute(f"EXEC generate_ids @in_node_id = {node_id}, @requested_count = {count}")
     else:
         cursor.execute(f"SELECT id FROM generate_ids({node_id}, {count})")
     rows = cursor.fetchall()
@@ -39,15 +35,9 @@ def _generate_ranj_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute(
-            f"EXEC generate_ranjids @in_node_id = {node_id}, "
-            f"@requested_count = {count}"
-        )
+        cursor.execute(f"EXEC generate_ranjids @in_node_id = {node_id}, @requested_count = {count}")
         rows = cursor.fetchall()
-        return [
-            RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0]))))
-            for r in rows
-        ]
+        return [RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0])))) for r in rows]
     else:
         cursor.execute(f"SELECT id FROM generate_ranjids({node_id}, {count})")
         rows = cursor.fetchall()
@@ -68,30 +58,18 @@ class HeeRanjIdManagerMixin:
 
         model = self.model
 
-        heer_fields = [
-            f for f in model._meta.get_fields()
-            if isinstance(f, HeerIdField)
-        ]
-        ranj_fields = [
-            f for f in model._meta.get_fields()
-            if isinstance(f, RanjIdField)
-        ]
+        heer_fields = [f for f in model._meta.get_fields() if isinstance(f, HeerIdField)]
+        ranj_fields = [f for f in model._meta.get_fields() if isinstance(f, RanjIdField)]
 
         for field in heer_fields:
-            needs_id = [
-                obj for obj in objs
-                if getattr(obj, field.attname, None) is None
-            ]
+            needs_id = [obj for obj in objs if getattr(obj, field.attname, None) is None]
             if needs_id:
                 ids = _generate_heer_ids(len(needs_id))
                 for obj, new_id in zip(needs_id, ids):
                     setattr(obj, field.attname, new_id)
 
         for field in ranj_fields:
-            needs_id = [
-                obj for obj in objs
-                if getattr(obj, field.attname, None) is None
-            ]
+            needs_id = [obj for obj in objs if getattr(obj, field.attname, None) is None]
             if needs_id:
                 ids = _generate_ranj_ids(len(needs_id))
                 for obj, new_id in zip(needs_id, ids):
@@ -102,4 +80,5 @@ class HeeRanjIdManagerMixin:
 
 class HeeRanjIdManager(HeeRanjIdManagerMixin, models.Manager):
     """Django manager with HeeRanjID bulk create support."""
+
     pass

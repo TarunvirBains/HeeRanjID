@@ -1,4 +1,5 @@
 """MSSQL SQL constants — loaded from bundled .sql files at import time."""
+
 from importlib import resources
 
 _pkg = resources.files(__package__)
