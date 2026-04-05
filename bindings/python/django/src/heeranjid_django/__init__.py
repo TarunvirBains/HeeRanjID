@@ -11,6 +11,7 @@ __all__ = [
     "HeeRanjIdFieldType",
     "HeeRanjIdPrefetch",
     "HeeRanjIdPKMixin",
+    "HeeRanjIdConversion",
 ]
 
 # Lazily import Django-model-dependent symbols so this module can be imported
@@ -19,6 +20,7 @@ _lazy = {
     "HeeRanjIdFieldType": "heeranjid_django.enums",
     "HeeRanjIdPrefetch": "heeranjid_django.enums",
     "HeeRanjIdPKMixin": "heeranjid_django.mixins",
+    "HeeRanjIdConversion": "heeranjid_django.operations",
 }
 
 
