@@ -1,15 +1,17 @@
-# HeerId Specification v1.0
+# HeeRanjId Specification v2.0
 
 ## 1. Overview
 
-**HeerId** and **RanjId** are time-ordered identifiers sinpired by Snowflake-style IDs and designed for framework use. Collectively known as the **HeerRanjId** suite, they provide:
+**HeerId** and **RanjId** are time-ordered, deterministic identifiers designed to avoid the randomness of UUID while providing database-native sortability and distributed uniqueness. Collectively known as the **HeeRanjId** suite, they provide:
 
-- **HeerId (64-bit):** Default primary key for standard entities (Postgres `BIGINT`).
-- **RanjId (128-bit):** High-precision key for event streams and logs (Postgres `UUID`).
-- **Deterministic Sortability:** Database-native ordering for both variants.
-- **High write throughput:** 8196 and 65536 rows per node - most likely never your bottleneck
-- **Distributed System Compatibility:** Zero migration path from single-node to multi-node systems*
-- **Cross-Stack Compatibility:** Seamless use in **Rust (Axum)**, **Python (Django)**, **JS (Prisma)** and **C# (.NET)**.
+- **HeerId (64-bit):** A Snowflake-like ID modified for immediate implementation in non-distributed cases. Default primary key for standard entities (Postgres `BIGINT`). No coordination service needed — works out of the box with a single node and scales to 512 nodes without schema changes.
+- **RanjId (128-bit, UUIDv8):** High-precision key with self-describing timestamp precision — from microseconds for web apps to femtoseconds for particle physics and scientific instrumentation. Stored as a standard `UUID` in any database.
+- **Configurable Precision:** RanjId supports microsecond, nanosecond, picosecond, and femtosecond timestamp precision, encoded directly in each ID. No external configuration needed to interpret an ID's timestamp.
+- **Deterministic Sortability:** Database-native ordering for both variants. No random bits — every bit is meaningful.
+- **High write throughput:** 8,192 IDs/ms/node (HeerId) and 65,536 IDs/tick/node (RanjId) — most likely never your bottleneck.
+- **Physics use cases:** RanjId's femtosecond precision and 89-bit timestamp support timestamping events in particle physics experiments, laser instrumentation, and high-energy physics — anywhere sub-microsecond precision matters.
+- **Distributed System Compatibility:** Zero migration path from single-node to multi-node systems.
+- **Cross-Stack Compatibility:** Seamless use in **Rust**, **Python (Django)**, **TypeScript (Prisma)**, and **C# (.NET)**.
 
 
 ---
@@ -46,18 +48,30 @@ HeerId is a signed 64-bit integer using **63 usable bits**.
 
 | 41-bit timestamp | 9-bit node_id | 13-bit sequence |
 
-### RanjId (128-bit / UUID)
-RanjId uses a 128-bit block structured for UUIDv7 RFC 4122 compliance. While it features a physical 96-16-16 split, 6 bits are reserved for the UUID version and variant, resulting in a **6-90-16-16** effective payload.
+### RanjId (128-bit / UUIDv8)
+RanjId uses a 128-bit block structured as UUIDv8 (RFC 9562) — the designated format for custom UUID layouts. The 2-bit precision field makes every RanjId self-describing: you can determine the timestamp's unit (μs, ns, ps, fs) by inspecting the ID itself.
 
 | Bit Range | Length | Content | Note |
 | :--- | :--- | :--- | :--- |
-| 0 - 47 | 48 bits | Timestamp (High) | Part 1 of 96-bit $\mu s$ timestamp |
-| 48 - 51 | 4 bits | **Version (0111)** | UUIDv7 Marker |
-| 52 - 63 | 12 bits | Timestamp (Mid) | Part 2 of 96-bit $\mu s$ timestamp |
+| 0 - 47 | 48 bits | Timestamp (High) | Part 1 of 89-bit timestamp |
+| 48 - 51 | 4 bits | **Version (1000)** | UUIDv8 Marker |
+| 52 - 63 | 12 bits | Timestamp (Mid) | Part 2 of 89-bit timestamp |
 | 64 - 65 | 2 bits | **Variant (10)** | RFC 4122 Marker |
-| 66 - 95 | 30 bits | Timestamp (Low) | Part 3 of 96-bit $\mu s$ timestamp |
-| 96 - 111 | 16 bits | **Node ID** | Supports 65,536 Nodes |
-| 112 - 127 | 16 bits | **Sequence** | Supports 65,536 IDs/μs |
+| 66 - 67 | 2 bits | **Precision** | `00`=μs, `01`=ns, `10`=ps, `11`=fs |
+| 68 - 96 | 29 bits | Timestamp (Low) | Part 3 of 89-bit timestamp |
+| 97 - 111 | 15 bits | **Node ID** | Supports 32,768 Nodes |
+| 112 - 127 | 16 bits | **Sequence** | Supports 65,536 IDs/tick |
+
+### Precision Levels
+
+| Setting | Unit | 89-bit Range | Use Case |
+| :--- | :--- | :--- | :--- |
+| `us` | Microseconds (10⁻⁶ s) | ~19.6 trillion years | Web apps, databases (default for SQL generation) |
+| `ns` | Nanoseconds (10⁻⁹ s) | ~19.6 billion years | High-frequency trading, real-time systems |
+| `ps` | Picoseconds (10⁻¹² s) | ~19.6 million years | Telecom, instrumentation |
+| `fs` | Femtoseconds (10⁻¹⁵ s) | ~19,620 years | Particle physics, laser experiments |
+
+Set via environment variable: `RANJID_PRECISION=ns` (default: `ns` for application-level generation).
 
 > [!CAUTION]
 > **Frontend Safety:** Because 2^63-1 exceeds JavaScript's `Number.MAX_SAFE_INTEGER` (2^53-1), all HeerIds **MUST** be serialized as **Strings** in JSON responses to prevent truncation.
@@ -86,9 +100,7 @@ Milliseconds since custom epoch (~69.7 years range).
 
 ### Epoch
 
-The epoch is not defined by the HeerId crate.
-
-Each implementation chooses its own epoch via the `heer_config` table.
+The default epoch is `2026-01-01T00:00:00Z`. Each deployment can override this via the `heer_config` table. The epoch determines the zero-point for all timestamps — HeerId's 41-bit millisecond counter and RanjId's 89-bit precision-dependent counter both measure time since this epoch.
 
 ---
 
@@ -226,9 +238,10 @@ id BIGINT PRIMARY KEY DEFAULT generate_id();
 
 ### Provided
 - **HeerId:** Millisecond precision; K-sortable by node.
-- **RanjId:** Microsecond precision; Strictly sortable by Time -> Node -> Sequence.
-- **Collision Resistance:** Deterministic uniqueness across 65,536 nodes for RanjId.
-- **Storage:** RanjId is fully compliant with `UUID` parsers in **Django** and **.NET**.
+- **RanjId:** Configurable precision (μs/ns/ps/fs); Strictly sortable by Time → Node → Sequence within the same precision.
+- **Collision Resistance:** Deterministic uniqueness across 32,768 nodes for RanjId, 512 nodes for HeerId.
+- **Storage:** RanjId is fully compliant with `UUID` parsers in **Django**, **.NET**, **Postgres**, and **MSSQL**. UUIDv8 is accepted everywhere UUIDs are stored.
+- **Self-Describing:** Each RanjId encodes its own precision — no external configuration needed to interpret timestamps.
 
 ### Not Provided
 - **Anonymity:** Both IDs leak the creation time and Node ID by design.
@@ -335,8 +348,10 @@ HeerId is a database-native ID system that scales without introducing complexity
 
 ## 21. Long-Term
 
-- ~69 year lifespan  
-- future migration → UUIDv7, Heer128, or composite key (multiple epoches).     
+- HeerId: ~69 year lifespan from epoch
+- RanjId: ~19,620 years (femtoseconds) to ~19.6 trillion years (microseconds)
+- Built-in batch conversion: `HeerId::batch_to_ranjids()` for upgrading from 64-bit to 128-bit IDs
+- Reverse conversion with automatic timestamp squashing detection
 
 ---
 
@@ -350,13 +365,15 @@ HeerId is a database-native ID system that scales without introducing complexity
 
 | Feature | HeerId | RanjId |
 | :--- | :--- | :--- |
-| **Bit Width** | 64-bit | 128-bit |
+| **Bit Width** | 64-bit | 128-bit (UUIDv8) |
 | **Postgres Type** | `BIGINT` | `UUID` |
-| **Precision** | Millisecond ($ms$) | Microsecond ($\mu s$) |
-| **Timestamp Bits** | 41 bits | 96 bits (90 effective) |
-| **Node ID Bits** | 9 bits (512) | 16 bits (65,536) |
-| **Sequence Bits** | 13 bits (8,192/ms) | 16 bits (65,536/μs) |
-| **Max Lifespan** | ~69 Years | ~2.5 Trillion Years |
+| **Precision** | Millisecond | Configurable: μs / ns / ps / fs |
+| **Timestamp Bits** | 41 bits | 89 bits |
+| **Precision Bits** | — | 2 bits (self-describing) |
+| **Node ID Bits** | 9 bits (512) | 15 bits (32,768) |
+| **Sequence Bits** | 13 bits (8,192/ms) | 16 bits (65,536/tick) |
+| **Max Lifespan** | ~69 years | ~19.6T years (μs) to ~19,620 years (fs) |
+| **Default Epoch** | `2026-01-01` | `2026-01-01` |
 
 ---
 
@@ -409,7 +426,7 @@ SELECT set_heer_node_id(1);
 SELECT generate_id();
 SELECT id FROM generate_ids(10);
 
--- RanjId sessions (node_id 0-65535)
+-- RanjId sessions (node_id 0-32767)
 SELECT set_heer_ranj_node_id(1);
 SELECT generate_ranjid();
 SELECT id FROM generate_ranjids(10);
@@ -440,7 +457,7 @@ println!("time={}ms node={} seq={}", parts.timestamp_ms, parts.node_id, parts.se
 
 // RanjId parts
 let parts = ranj.into_parts();
-println!("time={}us node={} seq={}", parts.timestamp_micros, parts.node_id, parts.sequence);
+println!("time={}{} node={} seq={}", parts.timestamp, parts.precision.label(), parts.node_id, parts.sequence);
 ```
 
 ### JSON Serialization
@@ -469,7 +486,7 @@ cargo test
 
 ### Extended Epochs (Big Bang)
 
-RanjId supports epochs beyond PostgreSQL's TIMESTAMP range via `ranj_epoch_offset`:
+RanjId supports epochs beyond PostgreSQL's TIMESTAMP range via `ranj_epoch_offset`. Combined with femtosecond precision, this enables timestamping events relative to cosmological timescales:
 
 ```sql
 INSERT INTO heer_config (id, epoch, ranj_epoch_offset)
@@ -480,5 +497,5 @@ VALUES (
 );
 ```
 
-This encodes microseconds since the Big Bang (~4.35 x 10^23), well within the 90-bit timestamp range (~1.24 x 10^27).
+With the default epoch of `2026-01-01`, the 89-bit timestamp provides ~19,620 years of femtosecond-precision range — sufficient for any modern scientific application.
 
