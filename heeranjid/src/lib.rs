@@ -1,9 +1,11 @@
+mod convert;
 mod error;
 mod heer;
 mod precision;
 mod ranj;
 mod serde_helpers;
 
+pub use convert::{ConflictKind, ConversionConflict, ConversionError};
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use precision::{RanjPrecision, generation_precision};
