@@ -22,6 +22,7 @@ def forwards(apps, schema_editor):
         sql.SESSION,
         sql.GENERATE_HEERID,
         sql.GENERATE_RANJID,
+        sql.CONFIGURE,
         sql.SEED,
     ]
 
@@ -35,6 +36,12 @@ def forwards(apps, schema_editor):
                     schema_editor.execute(batch)
         else:
             schema_editor.execute(part)
+
+    # After all SQL parts are executed, call heer_configure() to bake in epoch/precision
+    if backend == "mssql":
+        schema_editor.execute("EXEC heer_configure")
+    else:
+        schema_editor.execute("SELECT heer_configure()")
 
 
 def backwards(apps, schema_editor):

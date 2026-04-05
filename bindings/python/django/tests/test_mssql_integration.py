@@ -41,19 +41,22 @@ def mssql_conn():
 
     # Install schema and procedures
     from heeranjid.sql import mssql
-    for sql in [mssql.SCHEMA, mssql.SESSION, mssql.GENERATE_HEERID, mssql.GENERATE_RANJID, mssql.SEED]:
+    for sql in [mssql.SCHEMA, mssql.SESSION, mssql.GENERATE_HEERID, mssql.GENERATE_RANJID, mssql.CONFIGURE, mssql.SEED]:
         for batch in sql.split("\nGO\n"):
             batch = batch.strip()
             if batch and batch != "GO":
                 cur.execute(batch)
 
-    # Set epoch
+    # Set epoch and precision
     cur.execute("""
         IF NOT EXISTS (SELECT 1 FROM heer_config WHERE id = 1)
-            INSERT INTO heer_config (id, epoch) VALUES (1, '2024-01-01T00:00:00')
+            INSERT INTO heer_config (id, epoch, precision) VALUES (1, '2026-01-01T00:00:00', 'us')
         ELSE
-            UPDATE heer_config SET epoch = '2024-01-01T00:00:00' WHERE id = 1
+            UPDATE heer_config SET epoch = '2026-01-01T00:00:00', precision = 'us' WHERE id = 1
     """)
+
+    # Call heer_configure to bake in epoch/precision
+    cur.execute("EXEC heer_configure")
 
     # Register node 2 for multi-node tests
     cur.execute("""
