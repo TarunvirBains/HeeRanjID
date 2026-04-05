@@ -1,11 +1,13 @@
 mod error;
 mod heer;
+mod precision;
 mod ranj;
 mod serde_helpers;
 
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
-pub use ranj::{RANJ_NODE_ID_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts};
+pub use precision::{RanjPrecision, generation_precision};
+pub use ranj::{RANJ_NODE_ID_BITS, RANJ_PRECISION_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId, RanjIdParts};
 
 #[cfg(test)]
 mod tests {
@@ -30,10 +32,11 @@ mod tests {
 
     #[test]
     fn ranjid_round_trips_parts() {
-        let id = RanjId::new(1_234_567_890_123, 513, 4096).unwrap();
+        let id = RanjId::new(1_234_567_890_123, RanjPrecision::Microseconds, 513, 4096).unwrap();
         let parts = id.into_parts();
 
-        assert_eq!(parts.timestamp_micros, 1_234_567_890_123);
+        assert_eq!(parts.timestamp, 1_234_567_890_123);
+        assert_eq!(parts.precision, RanjPrecision::Microseconds);
         assert_eq!(parts.node_id, 513);
         assert_eq!(parts.sequence, 4096);
     }
@@ -60,10 +63,10 @@ mod tests {
 
     #[test]
     fn ranjid_orders_by_time_then_node_then_sequence() {
-        let a = RanjId::new(10, 1, 1).unwrap();
-        let b = RanjId::new(10, 1, 2).unwrap();
-        let c = RanjId::new(10, 2, 0).unwrap();
-        let d = RanjId::new(11, 0, 0).unwrap();
+        let a = RanjId::new(10, RanjPrecision::Microseconds, 1, 1).unwrap();
+        let b = RanjId::new(10, RanjPrecision::Microseconds, 1, 2).unwrap();
+        let c = RanjId::new(10, RanjPrecision::Microseconds, 2, 0).unwrap();
+        let d = RanjId::new(11, RanjPrecision::Microseconds, 0, 0).unwrap();
 
         assert!(a < b);
         assert!(b < c);
@@ -80,7 +83,7 @@ mod tests {
 
     #[test]
     fn serde_serializes_ranjid_as_a_string() {
-        let id = RanjId::new(55, 7, 9).unwrap();
+        let id = RanjId::new(55, RanjPrecision::Microseconds, 7, 9).unwrap();
         let json = serde_json::to_string(&id).unwrap();
 
         assert_eq!(json, format!("\"{}\"", id.as_uuid()));
@@ -155,35 +158,36 @@ mod tests {
     #[test]
     fn ranjid_accepts_max_field_values() {
         let id = RanjId::new(
-            RanjId::MAX_TIMESTAMP_MICROS,
+            RanjId::MAX_TIMESTAMP,
+            RanjPrecision::Microseconds,
             RanjId::MAX_NODE_ID,
             RanjId::MAX_SEQUENCE,
         )
         .unwrap();
         let parts = id.into_parts();
-        assert_eq!(parts.timestamp_micros, RanjId::MAX_TIMESTAMP_MICROS);
+        assert_eq!(parts.timestamp, RanjId::MAX_TIMESTAMP);
         assert_eq!(parts.node_id, RanjId::MAX_NODE_ID);
         assert_eq!(parts.sequence, RanjId::MAX_SEQUENCE);
     }
 
     #[test]
     fn ranjid_rejects_overflow_timestamp() {
-        let err = RanjId::new(RanjId::MAX_TIMESTAMP_MICROS + 1, 0, 0).unwrap_err();
+        let err = RanjId::new(RanjId::MAX_TIMESTAMP + 1, RanjPrecision::Microseconds, 0, 0).unwrap_err();
         assert!(matches!(err, Error::TimestampOutOfRange { .. }));
     }
 
     #[test]
     fn ranjid_zero_round_trips() {
-        let id = RanjId::new(0, 0, 0).unwrap();
+        let id = RanjId::new(0, RanjPrecision::Microseconds, 0, 0).unwrap();
         let parts = id.into_parts();
-        assert_eq!(parts.timestamp_micros, 0);
+        assert_eq!(parts.timestamp, 0);
         assert_eq!(parts.node_id, 0);
         assert_eq!(parts.sequence, 0);
     }
 
     #[test]
     fn ranjid_from_str_round_trips() {
-        let id = RanjId::new(1_000_000, 100, 200).unwrap();
+        let id = RanjId::new(1_000_000, RanjPrecision::Microseconds, 100, 200).unwrap();
         let s = id.to_string();
         let parsed: RanjId = s.parse().unwrap();
         assert_eq!(id, parsed);
@@ -197,10 +201,30 @@ mod tests {
 
     #[test]
     fn ranjid_preserves_uuid_version_and_variant() {
-        let id = RanjId::new(999_999, 42, 7).unwrap();
+        let id = RanjId::new(999_999, RanjPrecision::Microseconds, 42, 7).unwrap();
         let uuid = id.as_uuid();
-        assert_eq!(uuid.get_version_num(), 7);
+        assert_eq!(uuid.get_version_num(), 8);
         assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+    }
+
+    #[test]
+    fn ranjid_precision_round_trips() {
+        for prec in [RanjPrecision::Microseconds, RanjPrecision::Nanoseconds,
+                     RanjPrecision::Picoseconds, RanjPrecision::Femtoseconds] {
+            let id = RanjId::new(1_000_000, prec, 100, 200).unwrap();
+            let parts = id.into_parts();
+            assert_eq!(parts.precision, prec);
+            assert_eq!(parts.timestamp, 1_000_000);
+            assert_eq!(parts.node_id, 100);
+            assert_eq!(parts.sequence, 200);
+        }
+    }
+
+    #[test]
+    fn ranjid_timestamp_micros_converts_from_precision() {
+        // 1000 nanoseconds = 1 microsecond
+        let id = RanjId::new(1000, RanjPrecision::Nanoseconds, 1, 0).unwrap();
+        assert_eq!(id.timestamp_micros(), 1); // 1000ns / 1000 = 1us
     }
 
     #[test]
