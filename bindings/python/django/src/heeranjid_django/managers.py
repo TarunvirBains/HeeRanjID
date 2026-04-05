@@ -23,9 +23,9 @@ def _generate_heer_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute(f"EXEC generate_ids @in_node_id = {node_id}, @requested_count = {count}")
+        cursor.execute("EXEC generate_ids @in_node_id = %s, @requested_count = %s", [node_id, count])
     else:
-        cursor.execute(f"SELECT id FROM generate_ids({node_id}, {count})")
+        cursor.execute("SELECT id FROM generate_ids(%s, %s)", [node_id, count])
     rows = cursor.fetchall()
     return [HeerId(int(r[0])) for r in rows]
 
@@ -35,11 +35,11 @@ def _generate_ranj_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute(f"EXEC generate_ranjids @in_node_id = {node_id}, @requested_count = {count}")
+        cursor.execute("EXEC generate_ranjids @in_node_id = %s, @requested_count = %s", [node_id, count])
         rows = cursor.fetchall()
         return [RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0])))) for r in rows]
     else:
-        cursor.execute(f"SELECT id FROM generate_ranjids({node_id}, {count})")
+        cursor.execute("SELECT id FROM generate_ranjids(%s, %s)", [node_id, count])
         rows = cursor.fetchall()
         return [RanjId.from_str(str(r[0])) for r in rows]
 

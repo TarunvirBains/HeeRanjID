@@ -43,9 +43,9 @@ class HeerIdField(models.BigIntegerField):
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute(f"EXEC generate_id @in_node_id = {node_id}")
+            cursor.execute("EXEC generate_id @in_node_id = %s", [node_id])
         else:
-            cursor.execute(f"SELECT generate_id({node_id})")
+            cursor.execute("SELECT generate_id(%s)", [node_id])
         row = cursor.fetchone()
         new_id = HeerId(int(row[0]))
         setattr(model_instance, self.attname, new_id)
@@ -116,12 +116,12 @@ class RanjIdField(models.Field):
 
         cursor = connection.cursor()
         if connection.vendor == "microsoft":
-            cursor.execute(f"EXEC generate_ranjid @in_node_id = {node_id}")
+            cursor.execute("EXEC generate_ranjid @in_node_id = %s", [node_id])
             row = cursor.fetchone()
             raw = row[0]
             new_id = RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(raw))))
         else:
-            cursor.execute(f"SELECT generate_ranjid({node_id})")
+            cursor.execute("SELECT generate_ranjid(%s)", [node_id])
             row = cursor.fetchone()
             new_id = RanjId.from_str(str(row[0]))
         setattr(model_instance, self.attname, new_id)

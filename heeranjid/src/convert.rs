@@ -188,6 +188,8 @@ impl RanjId {
             }
         }
 
+        results.sort_by_key(|(rid, _)| *rid);
+
         Ok(results)
     }
 }
