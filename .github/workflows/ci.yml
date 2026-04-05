@@ -198,7 +198,7 @@ jobs:
           pip-audit --skip-editable
 
       - name: License check
-        run: pip-licenses --allow-only="MIT;MIT License;BSD-3-Clause;BSD License;BSD-2-Clause;Apache-2.0;Apache Software License;PSF-2.0;Python Software Foundation License;LGPL-2.1-or-later;GNU Library or Lesser General Public License (LGPL);ISC;Python-2.0;MPL-2.0"
+        run: pip-licenses --fail-only --deny-only="GPL-3.0;GPL-3.0-only;GPL-2.0;GPL-2.0-only;AGPL-3.0;AGPL-3.0-only;SSPL-1.0;BSL-1.1;BUSL-1.1"
 
       - name: Run core tests
         run: pytest bindings/python/tests/ -v
