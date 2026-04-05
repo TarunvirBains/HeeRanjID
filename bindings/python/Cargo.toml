@@ -1,0 +1,15 @@
+[package]
+name = "heeranjid-python"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+name = "_heeranjid"
+crate-type = ["cdylib"]
+
+[dependencies]
+heeranjid = { path = "../../heeranjid", default-features = false }
+pyo3 = { version = "0.24", features = ["extension-module"] }
+uuid = "1"
