@@ -23,7 +23,9 @@ def _generate_heer_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute("EXEC generate_ids @in_node_id = %s, @requested_count = %s", [node_id, count])
+        cursor.execute(
+            "EXEC generate_ids @in_node_id = %s, @requested_count = %s", [node_id, count]
+        )
     else:
         cursor.execute("SELECT id FROM generate_ids(%s, %s)", [node_id, count])
     rows = cursor.fetchall()
@@ -35,7 +37,9 @@ def _generate_ranj_ids(count):
     node_id = _get_node_id()
     cursor = connection.cursor()
     if connection.vendor == "microsoft":
-        cursor.execute("EXEC generate_ranjids @in_node_id = %s, @requested_count = %s", [node_id, count])
+        cursor.execute(
+            "EXEC generate_ranjids @in_node_id = %s, @requested_count = %s", [node_id, count]
+        )
         rows = cursor.fetchall()
         return [RanjId.from_str(str(uuid_mod.UUID(bytes=bytes(r[0])))) for r in rows]
     else:
