@@ -6,17 +6,17 @@ type Backend = "postgres" | "mssql";
 /**
  * Resolves the SQL directory root.
  * - When installed as an npm package, sql/ is bundled alongside this file (copied at pack time).
- * - In development (repo checkout), sql/ lives one level above the package root as the git submodule.
+ * - In development (repo checkout), sql/ lives at the repo root as the git submodule.
  */
 function resolveSqlRoot(): string {
-  // __dirname is heeranjid-node/js/prisma in both dev and built scenarios.
-  // Bundled path: heeranjid-node/sql/ (two dirs up from __dirname)
+  // __dirname is bindings/node/js/prisma in both dev and built scenarios.
+  // Bundled path: bindings/node/sql/ (two dirs up from __dirname)
   const bundled = join(__dirname, "..", "..", "sql");
   if (existsSync(bundled)) {
     return bundled;
   }
-  // Development / submodule path: repo root sql/ (three dirs up from __dirname)
-  const submodule = join(__dirname, "..", "..", "..", "sql");
+  // Development / submodule path: repo root sql/ (four dirs up from __dirname)
+  const submodule = join(__dirname, "..", "..", "..", "..", "sql");
   if (existsSync(submodule)) {
     return submodule;
   }

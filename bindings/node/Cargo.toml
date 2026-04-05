@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-heeranjid = { path = "../heeranjid", default-features = false }
+heeranjid = { path = "../../heeranjid", default-features = false }
 napi = { version = "2", features = ["napi9"] }
 napi-derive = "2"
 uuid = "1"

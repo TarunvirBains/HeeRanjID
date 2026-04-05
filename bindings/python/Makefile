@@ -1,6 +1,6 @@
 .PHONY: dev build clean copy-sql
 
-SQL_SRC := ../sql
+SQL_SRC := ../../sql
 SQL_DEST := python/heeranjid/sql
 
 dev: copy-sql

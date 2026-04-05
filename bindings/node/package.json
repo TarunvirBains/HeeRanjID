@@ -14,7 +14,7 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "prepack": "cp -r ../sql ./sql",
+    "prepack": "cp -r ../../sql ./sql",
     "postpack": "rm -rf ./sql",
     "test": "vitest run"
   },
