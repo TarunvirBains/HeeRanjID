@@ -9,6 +9,10 @@ description = "Django integration for HeeRanjID distributed ID generation"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "Tarunvir Bains" },
+]
+keywords = ["django", "distributed", "id", "uuid", "heerid"]
 dependencies = [
     "heeranjid",
     "django>=4.2",

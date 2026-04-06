@@ -9,6 +9,10 @@ description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "Tarunvir Bains" },
+]
+keywords = ["distributed", "id", "uuid", "snowflake", "heerid"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
