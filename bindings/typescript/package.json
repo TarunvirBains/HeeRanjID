@@ -1,7 +1,7 @@
 {
   "name": "heeranjid",
   "version": "0.1.0",
-  "description": "Distributed ID generation - HeerId (64-bit) and RanjId (128-bit UUIDv7)",
+  "description": "Distributed ID generation - HeerId (64-bit) and RanjId (128-bit UUIDv8)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",

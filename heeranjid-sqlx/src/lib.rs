@@ -1,3 +1,6 @@
+//! SQLx helpers for installing the HeeRanjID schema and generating IDs from
+//! PostgreSQL.
+
 mod error;
 mod postgres;
 
