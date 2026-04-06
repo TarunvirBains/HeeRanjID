@@ -10,6 +10,7 @@ description = "SQLx integration for HeeRanjID distributed ID generation"
 keywords = ["distributed", "id", "sqlx", "postgres"]
 categories = ["database"]
 readme = "README.md"
+include = ["src/**/*", "sql/**/*.sql", "README.md", "Cargo.toml"]
 
 [dependencies]
 heeranjid = { version = "0.1.0", path = "../heeranjid" }

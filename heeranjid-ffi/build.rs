@@ -3,9 +3,10 @@ use std::path::Path;
 fn main() {
     // Generate C header bindings
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let out_dir = std::env::var("OUT_DIR").unwrap();
     cbindgen::generate(&crate_dir)
         .expect("Unable to generate C bindings")
-        .write_to_file("heeranjid.h");
+        .write_to_file(format!("{out_dir}/heeranjid.h"));
 
     // Copy SQL files from submodule to output directory when include-sql feature is enabled
     if std::env::var("CARGO_FEATURE_INCLUDE_SQL").is_ok() {
