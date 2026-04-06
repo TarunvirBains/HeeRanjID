@@ -1,6 +1,8 @@
 # heeranjid-ffi
 
-C FFI bindings for HeeRanjID.
+> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale. `HeerId` from Heer; `RanjId` from Ranjha.
+
+C FFI bindings for HeerRanjId.
 
 This crate builds a shared library that exposes the core identifier types to C
 and other FFI consumers.

@@ -1,6 +1,8 @@
-# HeeRanjID
+# HeerRanjId
 
-HeeRanjID is a cross-language ID system built around two related formats:
+> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale (think Romeo and Juliet, set in Punjab). `HeerId` takes its name from Heer; `RanjId` from Ranjha.
+
+HeerRanjId is a cross-language ID system built around two related formats:
 
 - `HeerId`: a compact, time-ordered 64-bit identifier for internal storage
 - `RanjId`: a UUIDv8-compatible 128-bit identifier for APIs and cross-system interoperability

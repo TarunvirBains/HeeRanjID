@@ -1,6 +1,8 @@
 # heeranjid
 
-Core Rust types for HeeRanjID.
+> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale. `HeerId` from Heer; `RanjId` from Ranjha.
+
+Core Rust types for HeerRanjId.
 
 - `HeerId`: compact 64-bit identifier for internal storage and indexing
 - `RanjId`: UUIDv8-compatible 128-bit identifier for external interfaces

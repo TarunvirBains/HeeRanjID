@@ -1,6 +1,8 @@
 # heeranjid
 
-Python bindings for the core HeeRanjID types.
+> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale. `HeerId` from Heer; `RanjId` from Ranjha.
+
+Python bindings for the core HeerRanjId types.
 
 The package exposes:
 
