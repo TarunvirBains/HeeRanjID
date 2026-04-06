@@ -1,6 +1,8 @@
 # heeranjid
 
-Python bindings for the core HeeRanjID types.
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
+
+Python bindings for the core HeerRanjId types.
 
 The package exposes:
 

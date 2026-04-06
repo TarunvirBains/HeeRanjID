@@ -1,6 +1,8 @@
 # heeranjid-sqlx
 
-PostgreSQL and SQLx integration for HeeRanjID.
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
+
+PostgreSQL and SQLx integration for HeerRanjId.
 
 This crate exposes:
 

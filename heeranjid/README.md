@@ -1,6 +1,8 @@
 # heeranjid
 
-Core Rust types for HeeRanjID.
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
+
+Core Rust types for HeerRanjId.
 
 - `HeerId`: compact 64-bit identifier for internal storage and indexing
 - `RanjId`: UUIDv8-compatible 128-bit identifier for external interfaces

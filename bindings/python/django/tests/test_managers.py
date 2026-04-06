@@ -32,15 +32,13 @@ class TestHeeRanjIdManagerMixin:
         mgr = MyManager()
         assert getattr(mgr, "_heeranjid_enabled", False) is True
 
-    def test_has_heeranjid_bulk_create_method(self):
+    def test_overrides_bulk_create(self):
         from heeranjid_django.managers import HeeRanjIdManagerMixin
 
         class MyManager(HeeRanjIdManagerMixin, models.Manager):
             pass
 
-        mgr = MyManager()
-        assert hasattr(mgr, "heeranjid_bulk_create")
-        assert callable(mgr.heeranjid_bulk_create)
+        assert "bulk_create" in HeeRanjIdManagerMixin.__dict__
 
 
 class TestHeeRanjIdManager:
@@ -50,11 +48,10 @@ class TestHeeRanjIdManager:
         mgr = HeeRanjIdManager()
         assert getattr(mgr, "_heeranjid_enabled", False) is True
 
-    def test_has_heeranjid_bulk_create_method(self):
-        from heeranjid_django.managers import HeeRanjIdManager
+    def test_overrides_bulk_create(self):
+        from heeranjid_django.managers import HeeRanjIdManagerMixin
 
-        mgr = HeeRanjIdManager()
-        assert hasattr(mgr, "heeranjid_bulk_create")
+        assert "bulk_create" in HeeRanjIdManagerMixin.__dict__
 
     def test_is_django_manager(self):
         from heeranjid_django.managers import HeeRanjIdManager

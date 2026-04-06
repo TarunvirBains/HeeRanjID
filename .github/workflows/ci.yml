@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   rust:
@@ -239,8 +240,8 @@ jobs:
       - name: Run core tests
         run: pytest bindings/python/tests/ -v
 
-      - name: Run Django field tests
-        run: pytest bindings/python/django/tests/test_django_fields.py -v
+      - name: Run Django unit tests
+        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
 
       - name: Run Postgres integration tests
         run: pytest bindings/python/django/tests/test_postgres_integration.py -v

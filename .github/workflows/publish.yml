@@ -1,5 +1,8 @@
 name: Publish
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_dispatch:
     inputs:
@@ -51,17 +54,22 @@ jobs:
         if: contains(github.event.inputs.package, 'heeranjid (PyPI)')
         run: |
           cd bindings/python
-          make build
-          twine upload target/wheels/*.whl
+          mkdir -p python/heeranjid/sql/postgres python/heeranjid/sql/mssql
+          cp ../../sql/postgres/schema.sql ../../sql/postgres/seed.sql ../../sql/postgres/install.sql python/heeranjid/sql/postgres/
+          cp ../../sql/postgres/functions/*.sql python/heeranjid/sql/postgres/
+          cp ../../sql/mssql/schema.sql ../../sql/mssql/seed.sql ../../sql/mssql/install.sql python/heeranjid/sql/mssql/
+          cp ../../sql/mssql/procedures/*.sql python/heeranjid/sql/mssql/
+          maturin build --release
+          twine upload ../../target/wheels/*.whl
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       - name: Build and publish heeranjid-django
         if: contains(github.event.inputs.package, 'heeranjid-django')
         run: |
-          pip install hatchling --break-system-packages
+          pip install hatchling build --break-system-packages
           cd bindings/python/django
-          python -m build
+          python3 -m build
           twine upload dist/*
         env:
           TWINE_USERNAME: __token__
