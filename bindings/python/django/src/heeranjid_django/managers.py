@@ -83,12 +83,12 @@ class HeeRanjIdManagerMixin:
 
     _heeranjid_enabled = True
 
-    def heeranjid_bulk_create(self, objs, **kwargs):
+    def bulk_create(self, objs, **kwargs):
         """Generate HeeRanjID values for objects missing them, then bulk_create."""
         from heeranjid_django.fields import HeerIdField, RanjIdField
 
         if not objs:
-            return self.bulk_create(objs, **kwargs)
+            return super().bulk_create(objs, **kwargs)
 
         model = self.model
 
@@ -109,7 +109,7 @@ class HeeRanjIdManagerMixin:
                 for obj, new_id in zip(needs_id, ids):
                     setattr(obj, field.attname, new_id)
 
-        return self.bulk_create(objs, **kwargs)
+        return super().bulk_create(objs, **kwargs)
 
 
 class HeeRanjIdManager(HeeRanjIdManagerMixin, models.Manager):
