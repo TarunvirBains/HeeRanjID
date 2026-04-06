@@ -199,3 +199,110 @@ export function heeranjidExtension() {
 }
 
 export { getNodeId, getInstallSQL, getSeedSQL, getConfigureSQL };
+
+// ---------------------------------------------------------------------------
+// withAutoIds — composable Prisma extension for automatic ID injection
+// ---------------------------------------------------------------------------
+
+/** Map of Prisma model names to the ID type they use. */
+export type AutoIdModelMap = Record<string, "heerid" | "ranjid">;
+
+export interface AutoIdConfig {
+  /**
+   * The node ID to use when generating IDs from the database.
+   * Defaults to the NODE_ID environment variable if not provided.
+   */
+  nodeId?: number;
+  /**
+   * Map of model names (as they appear in `prisma.modelName`) to the ID type.
+   * Models not listed here are not affected.
+   *
+   * @example
+   * { User: "heerid", Post: "ranjid" }
+   */
+  models: AutoIdModelMap;
+  /**
+   * The name of the primary key field. Defaults to `"id"`.
+   */
+  idField?: string;
+}
+
+/**
+ * Returns a Prisma Client Extension that automatically generates HeeRanjID
+ * values for `create` and `createMany` operations when the primary key field
+ * is absent or `undefined`.
+ *
+ * Must be composed **after** `heeranjidExtension()` so that `this.$heeranjid`
+ * is available in the query interceptors.
+ *
+ * @example
+ * ```ts
+ * const prisma = new PrismaClient()
+ *   .$extends(heeranjidExtension())
+ *   .$extends(withAutoIds({ models: { User: "heerid", Post: "ranjid" } }));
+ *
+ * // IDs are generated automatically:
+ * await prisma.user.create({ data: { name: "Alice" } });
+ * await prisma.post.createMany({ data: [{ title: "Hello" }, { title: "World" }] });
+ * ```
+ */
+export function withAutoIds(config: AutoIdConfig) {
+  const idField = config.idField ?? "id";
+
+  return {
+    name: "heeranjid-auto-ids",
+    query: {
+      $allModels: {
+        async create({ model, args, query }: any) {
+          if (model in config.models && !args.data?.[idField]) {
+            const client: any = this;
+            const heeranjid = (client.$parent ?? client).$heeranjid;
+            const nodeId = config.nodeId ?? getNodeId();
+            const idType = config.models[model];
+
+            args = {
+              ...args,
+              data: {
+                ...args.data,
+                [idField]:
+                  idType === "heerid"
+                    ? await heeranjid.generateHeerId(nodeId)
+                    : await heeranjid.generateRanjId(nodeId),
+              },
+            };
+          }
+          return query(args);
+        },
+
+        async createMany({ model, args, query }: any) {
+          if (model in config.models) {
+            const items: any[] = Array.isArray(args.data)
+              ? args.data
+              : [args.data];
+            const missing = items.filter((item) => item?.[idField] == null);
+
+            if (missing.length > 0) {
+              const client: any = this;
+              const heeranjid = (client.$parent ?? client).$heeranjid;
+              const nodeId = config.nodeId ?? getNodeId();
+              const idType = config.models[model];
+
+              const ids: any[] =
+                idType === "heerid"
+                  ? await heeranjid.generateHeerIds(nodeId, missing.length)
+                  : await heeranjid.generateRanjIds(nodeId, missing.length);
+
+              let idx = 0;
+              for (const item of items) {
+                if (item?.[idField] == null) {
+                  item[idField] = ids[idx++];
+                }
+              }
+            }
+          }
+          return query(args);
+        },
+      },
+    },
+  };
+}
