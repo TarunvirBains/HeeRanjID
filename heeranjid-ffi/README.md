@@ -1,6 +1,6 @@
 # heeranjid-ffi
 
-> **HeerRanjId** (*/HEER-ranj-id/*)
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
 
 C FFI bindings for HeerRanjId.
 

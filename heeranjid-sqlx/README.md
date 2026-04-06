@@ -1,6 +1,6 @@
 # heeranjid-sqlx
 
-> **HeerRanjId** (*/HEER-ranj-id/*)
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
 
 PostgreSQL and SQLx integration for HeerRanjId.
 

@@ -1,6 +1,6 @@
 # heeranjid
 
-> **HeerRanjId** (*/HEER-ranj-id/*)
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
 
 Core Rust types for HeerRanjId.
 

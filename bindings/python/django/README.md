@@ -1,6 +1,6 @@
 # heeranjid-django
 
-> **HeerRanjId** (*/HEER-ranj-id/*)
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
 
 Django integration for [HeerRanjId](https://github.com/TarunvirBains/HeeRanjID) — a Snowflake-inspired distributed ID system that gives you compact, time-ordered primary keys without the drawbacks of auto-increment or plain UUIDs.
 
