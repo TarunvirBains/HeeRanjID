@@ -1,6 +1,6 @@
 # heeranjid-sqlx
 
-> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale. `HeerId` from Heer; `RanjId` from Ranjha.
+> **HeerRanjId** (*/HEER-ranj-id/*)
 
 PostgreSQL and SQLx integration for HeerRanjId.
 
