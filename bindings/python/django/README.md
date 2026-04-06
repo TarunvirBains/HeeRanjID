@@ -1,6 +1,8 @@
 # heeranjid-django
 
-Django integration for [HeeRanjID](https://github.com/TarunvirBains/HeeRanjID) — a production-ready distributed ID system that gives you compact, time-ordered primary keys without the drawbacks of auto-increment or plain UUIDs.
+Django integration for [HeeRanjID](https://github.com/TarunvirBains/HeeRanjID) — a Snowflake-inspired distributed ID system that gives you compact, time-ordered primary keys without the drawbacks of auto-increment or plain UUIDs.
+
+Snowflake IDs (originally from Twitter) are a well-established approach to distributed ID generation. HeeRanjID is a plug-and-play implementation of that concept for Django, with first-class PostgreSQL and SQL Server support and a UUID-compatible external representation built in.
 
 ---
 
