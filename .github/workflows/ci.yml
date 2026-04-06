@@ -144,7 +144,10 @@ jobs:
           $version = (Invoke-RestMethod "https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest").tag_name
           $url = "https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/cargo-deny-$version-x86_64-pc-windows-msvc.tar.gz"
           Invoke-WebRequest $url -OutFile cargo-deny.tar.gz
-          tar xz -C "$env:USERPROFILE\.cargo\bin" --strip-components=1 -f cargo-deny.tar.gz
+          New-Item -ItemType Directory -Force tmp-deny | Out-Null
+          tar -xzf cargo-deny.tar.gz -C tmp-deny
+          $exe = Get-ChildItem -Recurse tmp-deny -Filter cargo-deny.exe | Select-Object -First 1
+          Copy-Item $exe.FullName "$env:USERPROFILE\.cargo\bin\cargo-deny.exe"
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -169,17 +172,44 @@ jobs:
         run: cargo test -p heeranjid --lib
 
       - name: Build FFI
+        shell: pwsh
         run: |
           cargo build -p heeranjid-ffi --release
-          mkdir ffi-out
-          copy target\release\heeranjid_ffi.dll ffi-out\
-          copy heeranjid-ffi\heeranjid.h ffi-out\
+          New-Item -ItemType Directory -Force ffi-out | Out-Null
+          Copy-Item target\release\heeranjid_ffi.dll ffi-out\
+          Copy-Item heeranjid-ffi\heeranjid.h ffi-out\
+
+      - name: Install Python and maturin
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build Python wheel (Windows)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bindings/python/python/heeranjid/sql/postgres | Out-Null
+          New-Item -ItemType Directory -Force bindings/python/python/heeranjid/sql/mssql | Out-Null
+          Copy-Item sql/postgres/schema.sql, sql/postgres/seed.sql, sql/postgres/install.sql bindings/python/python/heeranjid/sql/postgres/
+          Copy-Item sql/postgres/functions/*.sql bindings/python/python/heeranjid/sql/postgres/
+          Copy-Item sql/mssql/schema.sql, sql/mssql/seed.sql, sql/mssql/install.sql bindings/python/python/heeranjid/sql/mssql/
+          Copy-Item sql/mssql/procedures/*.sql bindings/python/python/heeranjid/sql/mssql/
+          cd bindings/python
+          maturin build --release
 
       - name: Upload Windows FFI
         uses: actions/upload-artifact@v4
         with:
           name: ffi-windows-x64
           path: ffi-out/
+
+      - name: Upload Windows Python wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-windows
+          path: target/wheels/*.whl
 
   python:
     name: Python tests
@@ -274,6 +304,40 @@ jobs:
         env:
           MSSQL_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=mssql,1433;UID=sa;PWD=HeeRanjID_Test1;TrustServerCertificate=yes"
 
+  python-windows:
+    name: Python tests (Windows)
+    needs: rust-windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download Windows Python wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheel-windows
+          path: dist/
+
+      - name: Install packages
+        run: |
+          pip install (Get-ChildItem dist\*.whl).FullName
+          pip install -e bindings/python/django/
+          pip install pytest django pyodbc
+        shell: pwsh
+
+      - name: Run core tests
+        run: pytest bindings/python/tests/ -v
+
+      - name: Run Django unit tests
+        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
+
   typescript:
     name: TypeScript tests
     needs: rust
@@ -322,11 +386,13 @@ jobs:
           name: ffi-windows-x64
           path: ffi-artifacts/
 
-      - name: Run tests
+      - name: Add FFI to PATH
         shell: pwsh
+        run: |
+          "${{ github.workspace }}\ffi-artifacts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Run tests
         run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
-        env:
-          PATH: ${{ github.workspace }}\ffi-artifacts;${{ env.PATH }}
 
   dotnet:
     name: .NET tests
