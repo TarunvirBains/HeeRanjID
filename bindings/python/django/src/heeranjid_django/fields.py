@@ -1,9 +1,26 @@
 import uuid as uuid_mod
 
+from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.expressions import RawSQL
 from heeranjid import HeerId, RanjId
+
+
+class RanjIdFormField(forms.UUIDField):
+    """
+    Form field for RanjId values.
+
+    Accepts the same input as Django's UUIDField (hyphenated or bare hex strings)
+    but returns a RanjId instance instead of uuid.UUID, keeping the type
+    consistent whether the value came from a form or the database.
+    """
+
+    def to_python(self, value):
+        uuid_val = super().to_python(value)
+        if uuid_val is None:
+            return None
+        return RanjId.from_str(str(uuid_val))
 
 
 class HeerIdField(models.BigIntegerField):
@@ -68,7 +85,7 @@ class HeerIdField(models.BigIntegerField):
         return name, "heeranjid_django.fields.HeerIdField", args, kwargs
 
 
-class RanjIdField(models.Field):
+class RanjIdField(models.UUIDField):
     def __init__(self, *args, **kwargs):
         if kwargs.get("primary_key", False) and "db_default" not in kwargs:
             kwargs["db_default"] = RawSQL("generate_ranjid()", [])
@@ -91,15 +108,11 @@ class RanjIdField(models.Field):
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def db_type(self, connection):
+        # Preserve raw big-endian bytes on MSSQL to avoid uniqueidentifier's
+        # mixed-endian byte-swap, which would corrupt RanjId's timestamp bits.
         if connection.vendor == "microsoft":
             return "BINARY(16)"
-        return "uuid"
-
-    def rel_db_type(self, connection):
-        return self.db_type(connection)
-
-    def get_internal_type(self):
-        return "RanjIdField"
+        return super().db_type(connection)  # native uuid on Postgres
 
     def pre_save(self, model_instance, add):
         value = getattr(model_instance, self.attname, None)
@@ -131,17 +144,35 @@ class RanjIdField(models.Field):
         if value is None:
             return None
         if isinstance(value, (bytes, memoryview)):
+            # MSSQL BINARY(16): raw big-endian bytes
             value = uuid_mod.UUID(bytes=bytes(value))
-        if not isinstance(value, str):
-            value = str(value)
-        return RanjId.from_str(value)
+        if isinstance(value, uuid_mod.UUID):
+            return RanjId.from_str(str(value))
+        return RanjId.from_str(str(value))
+
+    def to_python(self, value):
+        if isinstance(value, RanjId):
+            return value
+        if value is None:
+            return None
+        # Delegate UUID string/UUID normalization to UUIDField, then wrap
+        uuid_val = super().to_python(value)
+        if uuid_val is None:
+            return None
+        return RanjId.from_str(str(uuid_val))
 
     def get_prep_value(self, value):
         if value is None:
             return None
         if isinstance(value, RanjId):
+            # Return uuid.UUID so DB drivers (psycopg2, pyodbc) handle it correctly
             return value.to_uuid()
-        return value
+        if isinstance(value, uuid_mod.UUID):
+            return value
+        return uuid_mod.UUID(str(value))
+
+    def formfield(self, **kwargs):
+        return super().formfield(**{"form_class": RanjIdFormField, **kwargs})
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
