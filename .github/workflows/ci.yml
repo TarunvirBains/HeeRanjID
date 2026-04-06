@@ -133,8 +133,22 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust
+      - name: Install Rust tools
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install cargo-deny
+        shell: bash
+        run: |
+          VERSION=$(curl -sL https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          if [[ "$(uname -s)" == "Linux" ]]; then
+            curl -sL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${VERSION}/cargo-deny-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+              | tar xz --strip-components=1 -C "$HOME/.cargo/bin" --wildcards '*/cargo-deny'
+          else
+            curl -sL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${VERSION}/cargo-deny-${VERSION}-x86_64-pc-windows-msvc.tar.gz" \
+              | tar xz --strip-components=1 -C "$HOME/.cargo/bin" --wildcards '*/cargo-deny.exe'
+          fi
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -146,19 +160,61 @@ jobs:
           key: windows-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: windows-cargo-
 
-      - name: Run unit tests
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --exclude heeranjid-python --exclude heeranjid-node -- -D warnings
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
 
       - name: Build FFI
-        run: cargo build -p heeranjid-ffi --release
+        shell: bash
+        run: |
+          cargo build -p heeranjid-ffi --release
+          mkdir -p ffi-out
+          if [[ "$(uname -s)" == "Linux" ]]; then
+            cp target/release/libheeranjid_ffi.so ffi-out/
+          else
+            cp target/release/heeranjid_ffi.dll ffi-out/
+          fi
+          cp heeranjid-ffi/heeranjid.h ffi-out/
+
+      - name: Install Python and maturin
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build Python wheel (Windows)
+        shell: bash
+        run: |
+          mkdir -p bindings/python/python/heeranjid/sql/postgres
+          mkdir -p bindings/python/python/heeranjid/sql/mssql
+          cp sql/postgres/schema.sql sql/postgres/seed.sql sql/postgres/install.sql bindings/python/python/heeranjid/sql/postgres/
+          cp sql/postgres/functions/*.sql bindings/python/python/heeranjid/sql/postgres/
+          cp sql/mssql/schema.sql sql/mssql/seed.sql sql/mssql/install.sql bindings/python/python/heeranjid/sql/mssql/
+          cp sql/mssql/procedures/*.sql bindings/python/python/heeranjid/sql/mssql/
+          cd bindings/python
+          maturin build --release
 
       - name: Upload Windows FFI
         uses: actions/upload-artifact@v4
         with:
           name: ffi-windows-x64
-          path: |
-            target/release/heeranjid_ffi.dll
-            heeranjid-ffi/heeranjid.h
+          path: ffi-out/
+
+      - name: Upload Windows Python wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-windows
+          path: target/wheels/*.whl
 
   python:
     name: Python tests
@@ -253,6 +309,40 @@ jobs:
         env:
           MSSQL_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=mssql,1433;UID=sa;PWD=HeeRanjID_Test1;TrustServerCertificate=yes"
 
+  python-windows:
+    name: Python tests (Windows)
+    needs: rust-windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download Windows Python wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheel-windows
+          path: dist/
+
+      - name: Install packages
+        shell: bash
+        run: |
+          pip install dist/*.whl
+          pip install -e bindings/python/django/
+          pip install pytest django pyodbc
+
+      - name: Run core tests
+        run: pytest bindings/python/tests/ -v
+
+      - name: Run Django unit tests
+        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
+
   typescript:
     name: TypeScript tests
     needs: rust
@@ -279,6 +369,36 @@ jobs:
           cd bindings/typescript
           npm install
           npm test
+
+  dotnet-windows:
+    name: .NET tests (Windows)
+    needs: rust-windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0
+
+      - name: Download Windows FFI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ffi-windows-x64
+          path: ffi-artifacts/
+
+      - name: Add FFI to PATH
+        shell: bash
+        run: echo "$GITHUB_WORKSPACE/ffi-artifacts" >> "$GITHUB_PATH"
+
+      - name: Run tests
+        run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ffi-artifacts
 
   dotnet:
     name: .NET tests
