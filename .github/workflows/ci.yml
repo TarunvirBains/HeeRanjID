@@ -133,8 +133,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust
+      - name: Install Rust tools
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install cargo-deny
+        shell: pwsh
+        run: |
+          $version = (Invoke-RestMethod "https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest").tag_name
+          $url = "https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/cargo-deny-$version-x86_64-pc-windows-msvc.tar.gz"
+          Invoke-WebRequest $url -OutFile cargo-deny.tar.gz
+          tar xz -C "$env:USERPROFILE\.cargo\bin" --strip-components=1 -f cargo-deny.tar.gz
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -146,19 +156,30 @@ jobs:
           key: windows-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: windows-cargo-
 
-      - name: Run unit tests
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --exclude heeranjid-python --exclude heeranjid-node -- -D warnings
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
 
       - name: Build FFI
-        run: cargo build -p heeranjid-ffi --release
+        run: |
+          cargo build -p heeranjid-ffi --release
+          mkdir ffi-out
+          copy target\release\heeranjid_ffi.dll ffi-out\
+          copy heeranjid-ffi\heeranjid.h ffi-out\
 
       - name: Upload Windows FFI
         uses: actions/upload-artifact@v4
         with:
           name: ffi-windows-x64
-          path: |
-            target/release/heeranjid_ffi.dll
-            heeranjid-ffi/heeranjid.h
+          path: ffi-out/
 
   python:
     name: Python tests
@@ -279,6 +300,33 @@ jobs:
           cd bindings/typescript
           npm install
           npm test
+
+  dotnet-windows:
+    name: .NET tests (Windows)
+    needs: rust-windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0
+
+      - name: Download Windows FFI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ffi-windows-x64
+          path: ffi-artifacts/
+
+      - name: Run tests
+        shell: pwsh
+        run: dotnet test bindings/dotnet/tests/HeeRanjID.Tests/
+        env:
+          PATH: ${{ github.workspace }}\ffi-artifacts;${{ env.PATH }}
 
   dotnet:
     name: .NET tests
