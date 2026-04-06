@@ -1,18 +1,19 @@
 [package]
 name = "heeranjid-ffi"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "C FFI bindings for HeeRanjID distributed ID generation"
-repository = "https://github.com/TarunvirBains/HeeRanjID"
 keywords = ["distributed", "id", "ffi", "c"]
 categories = ["api-bindings"]
+readme = "README.md"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-heeranjid = { path = "../heeranjid", default-features = false }
+heeranjid = { version = "0.1.0", path = "../heeranjid", default-features = false }
 uuid = "1"
 
 [features]

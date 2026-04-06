@@ -1,3 +1,9 @@
+//! Core HeeRanjID types.
+//!
+//! [`HeerId`] is the compact 64-bit identifier intended for internal storage.
+//! [`RanjId`] is the UUIDv8-compatible 128-bit identifier intended for
+//! interoperability and external interfaces.
+
 mod convert;
 mod error;
 mod heer;
