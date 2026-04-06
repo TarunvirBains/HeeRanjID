@@ -4,10 +4,8 @@ use sqlx::FromRow;
 
 pub const SCHEMA_SQL: &str = include_str!("../sql/schema.sql");
 pub const SESSION_SQL: &str = include_str!("../sql/functions/session.sql");
-pub const GENERATE_HEERID_SQL: &str =
-    include_str!("../sql/functions/generate_heerid.sql");
-pub const GENERATE_RANJID_SQL: &str =
-    include_str!("../sql/functions/generate_ranjid.sql");
+pub const GENERATE_HEERID_SQL: &str = include_str!("../sql/functions/generate_heerid.sql");
+pub const GENERATE_RANJID_SQL: &str = include_str!("../sql/functions/generate_ranjid.sql");
 pub const INSTALL_SQL: &str = concat!(
     include_str!("../sql/schema.sql"),
     "\n",
@@ -20,8 +18,7 @@ pub const INSTALL_SQL: &str = concat!(
 pub const FETCH_NODE_SQL: &str = include_str!("../sql/queries/fetch_node.sql");
 pub const FETCH_EPOCH_SQL: &str = include_str!("../sql/queries/fetch_epoch.sql");
 pub const SEED_SQL: &str = include_str!("../sql/seed.sql");
-pub const FETCH_ACTIVE_NODE_SQL: &str =
-    include_str!("../sql/queries/fetch_active_node.sql");
+pub const FETCH_ACTIVE_NODE_SQL: &str = include_str!("../sql/queries/fetch_active_node.sql");
 
 #[derive(Debug, Clone, PartialEq, Eq, FromRow)]
 pub struct HeerNode {
