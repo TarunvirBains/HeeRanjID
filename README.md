@@ -1,11 +1,11 @@
 # HeerRanjId
 
-> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale (think Romeo and Juliet, set in Punjab). `HeerId` takes its name from Heer; `RanjId` from Ranjha.
+> Named after Heer and Ranjha, the central figures of a classic South Asian folk tale.
 
-HeerRanjId is a cross-language ID system built around two related formats:
+HeerRanjId is a cross-language Snowflake-style ID system built around two related formats:
 
-- `HeerId`: a compact, time-ordered 64-bit identifier for internal storage
-- `RanjId`: a UUIDv8-compatible 128-bit identifier for APIs and cross-system interoperability
+- `HeerId`: a compact, time-ordered 64-bit integer identifier
+- `RanjId`: a UUIDv8-compatible 128-bit identifier with sub-millisecond precision and higher node/sequence capacity
 
 The repository centers on a Rust implementation, with PostgreSQL helpers and
 language bindings for Python, Django, TypeScript, .NET, and C FFI consumers.
@@ -14,15 +14,15 @@ language bindings for Python, Django, TypeScript, .NET, and C FFI consumers.
 
 Most teams end up choosing between:
 
-- integers that are compact but local to one database
-- UUIDs that are portable but larger and less index-friendly
-- Snowflake-style IDs that work well internally but are often tied to one stack
+- integers that are compact but collide in distributed systems
+- UUIDs that are portable but random — they fragment indexes and carry no timing information
+- Snowflake-style IDs that solve ordering but are often tied to one stack or language
 
-HeeRanjID separates those concerns cleanly:
+HeeRanjID provides a Snowflake-style system that works consistently across languages and databases, with a clear upgrade path built in:
 
-- store `HeerId` where compactness and index locality matter
-- expose `RanjId` where UUID compatibility matters
-- keep one encoding model across multiple languages and database integrations
+- start with `HeerId` — compact bigint, time-ordered, up to 511 nodes and 8,191 IDs per node per millisecond
+- migrate to `RanjId` when you need more headroom — up to 32,767 nodes, 65,535 IDs per node per timestamp unit, sub-millisecond precision, and UUID-compatible storage
+- the migration is lossless: `HeerId` converts to `RanjId` without data loss, and the UUID column type is compatible with existing tooling
 
 ## Repository Layout
 
