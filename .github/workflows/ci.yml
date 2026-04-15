@@ -297,7 +297,7 @@ jobs:
         run: pytest bindings/python/tests/ -v
 
       - name: Run Django unit tests
-        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
+        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_forms.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
 
       - name: Run Postgres integration tests
         run: pytest bindings/python/django/tests/test_postgres_integration.py -v
@@ -341,7 +341,7 @@ jobs:
         run: pytest bindings/python/tests/ -v
 
       - name: Run Django unit tests
-        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
+        run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_forms.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
 
   typescript:
     name: TypeScript tests

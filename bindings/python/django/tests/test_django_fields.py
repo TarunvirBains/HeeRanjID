@@ -90,10 +90,33 @@ class TestRanjIdField:
         assert field.db_type(conn) == "BINARY(16)"
 
     def test_rel_db_type_matches_db_type(self):
+        # rel_db_type delegates to db_type via Field base class
         field = RanjIdField()
         for vendor in ("postgresql", "microsoft"):
             conn = _FakeConnection(vendor)
             assert field.rel_db_type(conn) == field.db_type(conn)
+
+    def test_to_python_none(self):
+        field = RanjIdField()
+        assert field.to_python(None) is None
+
+    def test_to_python_ranjid_passthrough(self):
+        field = RanjIdField()
+        rid = RanjId.from_str("00000000-0000-8000-8000-0000006400c8")
+        assert field.to_python(rid) is rid
+
+    def test_to_python_string(self):
+        field = RanjIdField()
+        result = field.to_python("00000000-0000-8000-8000-0000006400c8")
+        assert isinstance(result, RanjId)
+        assert result.node_id == 100
+        assert result.sequence == 200
+
+    def test_to_python_uuid(self):
+        field = RanjIdField()
+        u = uuid.UUID("00000000-0000-8000-8000-0000006400c8")
+        result = field.to_python(u)
+        assert isinstance(result, RanjId)
 
     def test_from_db_value_none(self):
         field = RanjIdField()

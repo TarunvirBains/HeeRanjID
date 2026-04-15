@@ -178,9 +178,55 @@ This is the recommended approach for distributed systems. If you are running a s
 
 The `heeranjid_django` migration installs the SQL schema into your database. It is reversible — rolling back removes all installed functions and tables cleanly.
 
-### Converting between formats
+### Replacing an existing UUIDField with RanjIdField
 
-If you need to migrate an existing model from HeerId to RanjId primary keys (or vice versa), use the `HeeRanjIdConversion` migration operation:
+If you have a model that currently uses Django's built-in `UUIDField` and want to switch to `RanjIdField`, you can do so with a standard `AlterField` migration — **as long as the column has no existing rows** (or the table has not yet been created).
+
+`RanjIdField` stores `uuid` on PostgreSQL (the same column type as `UUIDField`), so the migration is a zero-cost metadata change on that backend. On SQL Server, `UUIDField` uses `uniqueidentifier` while `RanjIdField` uses `BINARY(16)` (to preserve correct byte order); the column type change requires an empty column.
+
+**Step 1 — update your model**
+
+```python
+# Before
+from django.db import models
+import uuid
+
+class Widget(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+# After
+from heeranjid_django.fields import RanjIdField
+from heeranjid_django.managers import HeeRanjIdManager
+
+class Widget(models.Model):
+    id = RanjIdField(primary_key=True)
+    objects = HeeRanjIdManager()
+```
+
+**Step 2 — generate the migration**
+
+```bash
+python manage.py makemigrations
+```
+
+Django detects that the field class changed and generates an `AlterField` operation.
+
+**Step 3 — apply the migration**
+
+```bash
+python manage.py migrate
+```
+
+On **PostgreSQL** the migration is a no-op at the schema level — the underlying column type (`uuid`) is identical to `UUIDField`, so no `ALTER COLUMN` is executed. However, this migration is only safe when the column is **empty**. `RanjId` validates UUIDv8 version bits on every read; any existing rows containing UUIDv4 (or other non-UUIDv8) values will raise `InvalidRanjIdVersion` when fetched.
+
+On **SQL Server** the migration changes the column from `uniqueidentifier` to `BINARY(16)`, which also requires an **empty** column.
+
+> **Why BINARY(16) on SQL Server?**
+> SQL Server's `uniqueidentifier` stores GUIDs in mixed-endian format (first three UUID components are byte-swapped from RFC 4122). RanjId encodes timestamp, node, and sequence into specific bit positions using big-endian layout; storing via `uniqueidentifier` would silently corrupt those bits. `BINARY(16)` preserves the raw big-endian bytes faithfully.
+
+### Converting between HeeRanjID formats
+
+If you need to migrate an existing model from HeerId to RanjId primary keys (or vice versa) — where both columns already contain HeeRanjID-generated values — use the `HeeRanjIdConversion` migration operation:
 
 ```python
 from heeranjid_django.operations import HeeRanjIdConversion
