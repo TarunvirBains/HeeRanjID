@@ -217,16 +217,16 @@ Django detects that the field class changed and generates an `AlterField` operat
 python manage.py migrate
 ```
 
-On **PostgreSQL** the migration is a no-op at the database level — the underlying column type (`uuid`) is identical, so no `ALTER COLUMN` is executed. Existing rows (if any) continue to work and can be read back as `RanjId` objects.
+On **PostgreSQL** the migration is a no-op at the schema level — the underlying column type (`uuid`) is identical to `UUIDField`, so no `ALTER COLUMN` is executed. However, this migration is only safe when the column is **empty**. `RanjId` validates UUIDv8 version bits on every read; any existing rows containing UUIDv4 (or other non-UUIDv8) values will raise `InvalidRanjIdVersion` when fetched.
 
-On **SQL Server** the migration changes the column from `uniqueidentifier` to `BINARY(16)`. This is only safe when the column is **empty** (no existing rows). If you have existing `UUIDField` data on SQL Server that you need to preserve, contact us or open an issue — a chunked data migration helper is on the roadmap.
+On **SQL Server** the migration changes the column from `uniqueidentifier` to `BINARY(16)`, which also requires an **empty** column.
 
 > **Why BINARY(16) on SQL Server?**
 > SQL Server's `uniqueidentifier` stores GUIDs in mixed-endian format (first three UUID components are byte-swapped from RFC 4122). RanjId encodes timestamp, node, and sequence into specific bit positions using big-endian layout; storing via `uniqueidentifier` would silently corrupt those bits. `BINARY(16)` preserves the raw big-endian bytes faithfully.
 
-### Converting between formats
+### Converting between HeeRanjID formats
 
-If you need to migrate an existing model from HeerId to RanjId primary keys (or vice versa), use the `HeeRanjIdConversion` migration operation:
+If you need to migrate an existing model from HeerId to RanjId primary keys (or vice versa) — where both columns already contain HeeRanjID-generated values — use the `HeeRanjIdConversion` migration operation:
 
 ```python
 from heeranjid_django.operations import HeeRanjIdConversion
