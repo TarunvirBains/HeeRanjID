@@ -9,7 +9,12 @@
   <PropertyGroup>
     <Description>Entity Framework Core integration for HeeRanjID distributed ID generation</Description>
     <RepositoryUrl>https://github.com/TarunvirBains/HeeRanjID</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
