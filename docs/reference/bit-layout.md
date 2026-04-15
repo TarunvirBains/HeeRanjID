@@ -128,6 +128,19 @@ UUID Version: 4 bits (fixed, version 8)
 UUID Variant: 2 bits (RFC 4122)
 ```
 
+### Precision field values
+
+The 2-bit precision field encodes the timestamp unit:
+
+```text
+00  microseconds
+01  nanoseconds   (default)
+10  picoseconds
+11  femtoseconds
+```
+
+The default is nanoseconds, overridable via the `RANJID_PRECISION` environment variable (`us`, `ns`, `ps`, `fs`). The precision is embedded in every RanjId, so the timestamp can always be decoded without external configuration.
+
 ---
 
 ## Structure Overview

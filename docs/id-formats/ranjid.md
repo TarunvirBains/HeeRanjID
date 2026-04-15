@@ -47,17 +47,20 @@ See [conversion rules](./conversion.md) for details.
 
 ## Structure
 
-RanjId is a 128-bit identifier.
+RanjId is a 128-bit value with a fixed field layout that fits within the UUID wire format:
 
-It may encode:
+```text
+| ts_high (48) | version (4) | ts_mid (12) | variant (2) | precision (2) | ts_low (29) | node_id (15) | sequence (16) |
+```
 
-* Timestamp information
-* Node or generator information
-* Sequence or uniqueness data
+- **ts_high / ts_mid / ts_low**: a 89-bit timestamp split across three UUID fields. The timestamp unit is given by the precision field.
+- **version**: fixed at `0b1000` (8), marking this as UUIDv8.
+- **variant**: fixed at `0b10`, RFC 4122 variant.
+- **precision**: 2 bits encoding the timestamp unit — `00`=microseconds, `01`=nanoseconds (default), `10`=picoseconds, `11`=femtoseconds.
+- **node_id**: 15 bits, max 32,767.
+- **sequence**: 16 bits, max 65,535.
 
-The exact encoding is designed to allow compatibility with HeerId where possible, while remaining usable as a standalone identifier.
-
-See [bit layout reference](../reference/bit-layout.md) for details.
+See [bit layout reference](../reference/bit-layout.md) for exact field positions and masks.
 
 ---
 
