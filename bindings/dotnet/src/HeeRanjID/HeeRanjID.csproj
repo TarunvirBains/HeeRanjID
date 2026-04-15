@@ -6,7 +6,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>HeeRanjID</RootNamespace>
     <IncludeSql>false</IncludeSql>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup Condition="'$(IncludeSql)' == 'true'">
     <Content Include="..\..\..\sql\**\*.sql"
