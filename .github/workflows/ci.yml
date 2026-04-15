@@ -272,7 +272,7 @@ jobs:
         run: |
           pip install dist/*.whl
           pip install -e bindings/python/django/
-          pip install pytest django psycopg2-binary pyodbc
+          pip install pytest pytest-django pytest-playwright django psycopg2-binary pyodbc
 
       - name: Install lint tools
         run: pip install ruff mypy pip-audit pip-licenses
@@ -299,8 +299,28 @@ jobs:
       - name: Run Django unit tests
         run: pytest bindings/python/django/tests/test_django_fields.py bindings/python/django/tests/test_forms.py bindings/python/django/tests/test_managers.py bindings/python/django/tests/test_mixins.py bindings/python/django/tests/test_operations.py -v
 
+      - name: Run mixin comparison tests (no DB)
+        run: pytest bindings/python/django/tests/test_mixin_comparison.py -v -k "not TestDbCreation"
+
       - name: Run Postgres integration tests
         run: pytest bindings/python/django/tests/test_postgres_integration.py -v
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      - name: Run mixin comparison DB tests
+        run: |
+          cd bindings/python/django/tests
+          pytest test_mixin_comparison.py::TestDbCreation -v
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      - name: Run Playwright admin E2E tests
+        run: |
+          cd bindings/python/django/tests
+          pytest test_admin_playwright.py -v
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 

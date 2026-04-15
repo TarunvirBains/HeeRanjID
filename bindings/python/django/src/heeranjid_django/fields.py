@@ -51,6 +51,9 @@ class HeerIdField(models.BigIntegerField):
             return value
         if not add:
             return value
+        # MANUAL mode: do not auto-generate; let the caller assign the PK.
+        if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
+            return value
 
         from django.db import connection
 
@@ -119,6 +122,9 @@ class RanjIdField(models.UUIDField):
         if value is not None:
             return value
         if not add:
+            return value
+        # MANUAL mode: do not auto-generate; let the caller assign the PK.
+        if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
             return value
 
         from django.db import connection
