@@ -1,6 +1,6 @@
 # HeerRanjId
 
-> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the star-crossed lovers of the classic Punjabi folk tale (think Romeo and Juliet, set in Punjab). `HeerId` takes its name from Heer; `RanjId` from Ranjha.
+> **Pronunciation:** *"Heer-Ranj-Id"* — named after Heer and Ranjha, the central figures of a classic South Asian folk tale. `HeerId` takes its name from Heer; `RanjId` from Ranjha.
 
 HeerRanjId is a cross-language Snowflake-style ID system built around two related formats:
 
