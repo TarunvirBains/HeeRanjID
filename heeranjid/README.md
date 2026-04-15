@@ -1,5 +1,7 @@
 # heeranjid
 
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
+
 Core Rust types for HeerRanjId.
 
 - `HeerId`: compact 64-bit Snowflake-style identifier, stored as `bigint`

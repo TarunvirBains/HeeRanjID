@@ -1,5 +1,7 @@
 # heeranjid-ffi
 
+> **HeerRanjId** ([ɦiːɾ.ɾaːnd͡ʒ.ɪd])
+
 C FFI bindings for HeerRanjId.
 
 This crate builds a shared library that exposes the core identifier types to C
