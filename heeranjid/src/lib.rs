@@ -1,8 +1,9 @@
 //! Core HeeRanjID types.
 //!
-//! [`HeerId`] is the compact 64-bit identifier intended for internal storage.
-//! [`RanjId`] is the UUIDv8-compatible 128-bit identifier intended for
-//! interoperability and external interfaces.
+//! [`HeerId`] is the compact 64-bit Snowflake-style identifier: the default
+//! starting format, stored as `bigint`.
+//! [`RanjId`] is the UUIDv8-compatible 128-bit upgrade format: higher node and
+//! sequence capacity, sub-millisecond precision, stored as `uuid`.
 
 mod convert;
 mod error;
