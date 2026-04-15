@@ -484,6 +484,36 @@ class TestDbCreation:
         # uuid4s are almost certainly not sorted (random) — we just verify they're unique
         assert len(set(pk_strs)) == 10
 
+    def test_init_mode_pk_assigned_at_instantiation(self, db_tables):
+        """INIT mode: pk is set by the post_init signal before save() is called."""
+        from django.db import connection
+
+        class InitPost(HeeRanjIdPKMixin, django_models.Model):
+            class HeeRanjId:
+                field_type = HeeRanjIdFieldType.RANJID
+                prefetch = HeeRanjIdPrefetch.INIT
+            title = django_models.CharField(max_length=100, default="")
+            class Meta:
+                app_label = "testapp_init"
+
+        with connection.schema_editor() as editor:
+            editor.create_model(InitPost)
+        try:
+            post = InitPost(title="init-test")
+            # post_init signal fires inside __init__; pk must be set before save()
+            assert post.pk is not None, "INIT mode should assign pk at __init__ time"
+            assert isinstance(post.pk, RanjId)
+
+            pk_before_save = post.pk
+            post.save()
+            assert post.pk == pk_before_save, "save() should not regenerate an already-assigned pk"
+
+            fetched = InitPost.objects.get(pk=post.pk)
+            assert fetched.title == "init-test"
+        finally:
+            with connection.schema_editor() as editor:
+                editor.delete_model(InitPost)
+
 
 # ── 9. Prefetch mode correctness ──────────────────────────────────────────────
 
