@@ -1,8 +1,8 @@
 # HeerId Format
 
-HeerId is a 64-bit, time-ordered identifier used for efficient storage and indexing within a system.
+HeerId is the default HeeRanjID format: a 64-bit, time-ordered integer that packs a millisecond timestamp, node ID, and sequence counter into a single `bigint` value.
 
-It follows a Snowflake-style structure, combining time, node identity, and a sequence counter into a single integer.
+It follows a Snowflake-style structure and is the natural starting point for most systems.
 
 ---
 
@@ -134,16 +134,8 @@ HeerId can be generated in two ways:
 
 ---
 
-## Summary
+## Upgrade path
 
-HeerId is a compact, time-ordered identifier designed for efficient internal use.
-
-It provides a balance between:
-
-* Performance (small size, ordered inserts)
-* Scalability (distributed generation via node IDs)
-* Simplicity (single 64-bit value)
-
-For external interoperability, HeerId can be converted into RanjId.
+HeerId supports up to 511 nodes and 8,191 IDs per node per millisecond. When a system grows beyond these limits — or requires sub-millisecond precision — it can migrate to RanjId. The conversion is lossless: every HeerId maps to exactly one RanjId.
 
 See [conversion rules](./conversion.md) for details.

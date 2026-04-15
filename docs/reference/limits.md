@@ -22,7 +22,7 @@ This page summarizes the practical limits of the built-in identifier layouts.
 
 ## Notes
 
-- `HeerId` is optimized for compact internal storage.
-- `RanjId` is optimized for interoperability and UUID tooling.
+- `HeerId` is the compact default format — 64-bit integer, `bigint` storage.
+- `RanjId` is the upgrade format — 128-bit UUIDv8, higher node and sequence capacity, sub-ms precision.
 - Converting `RanjId` back to `HeerId` is only possible when the encoded values
   fit within the `HeerId` field limits.

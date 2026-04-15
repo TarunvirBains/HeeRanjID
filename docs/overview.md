@@ -2,7 +2,7 @@
 
 HeeRanjID is a Snowflake-style ID system designed to work consistently across languages and databases.
 
-It provides time-ordered, compact identifiers for internal use, along with a UUID-compatible representation for interoperability across systems.
+It provides time-ordered, compact identifiers with a built-in upgrade path: start with `HeerId` and migrate to `RanjId` when you outgrow its limits — without data loss or schema disruption.
 
 ---
 
@@ -10,63 +10,58 @@ It provides time-ordered, compact identifiers for internal use, along with a UUI
 
 Most systems today choose between a few common approaches for identifiers:
 
-* **Auto-increment integers** — efficient and compact, but not globally unique
-* **UUIDs** — globally unique and portable, but larger and less efficient for indexing
+* **Auto-increment integers** — efficient and compact, but not globally unique across nodes
+* **UUIDs** — globally unique and portable, but random — they fragment indexes and carry no timing information
 * **Snowflake-style IDs** — time-ordered and compact, but often tied to specific languages or infrastructure
 
-In practice, this creates tradeoffs between performance, portability, and consistency across systems.
+HeeRanjID provides a Snowflake-style system that addresses these issues:
 
-HeeRanjID is designed to address these tradeoffs by combining:
-
-* A compact, time-ordered identifier for storage and indexing
-* A portable, UUID-compatible identifier for external use
-* A consistent format that can be used across multiple languages
-* Support for both application-level and database-backed ID generation
+* Time-ordered IDs for efficient indexing and range queries
+* Distributed generation without central coordination
+* A consistent encoding across multiple languages and database backends
+* A built-in upgrade path from a compact integer format to a UUID-compatible format
 
 ---
 
 ## ID Model
 
-HeeRanjID defines two related identifier formats:
+HeeRanjID defines two related identifier formats.
 
 ### HeerId
 
-A 64-bit, time-ordered integer identifier.
+A 64-bit, time-ordered integer identifier (stored as `bigint`).
 
-HeerId is optimized for:
+HeerId is the default starting point. It is optimized for:
 
-* Database storage efficiency
-* Index performance
-* Ordered insertion patterns
+* Compact storage — 8 bytes, fits in any `bigint` column
+* Index efficiency — time-ordered, sequential inserts
+* Simplicity — standard integer primary key
 
-It is intended for internal use within a system.
+HeerId supports up to **511 nodes** and **8,191 IDs per node per millisecond**.
 
 ---
 
 ### RanjId
 
-A 128-bit, UUID-compatible identifier.
+A 128-bit, UUIDv8-compatible identifier (stored as `uuid` on PostgreSQL, `BINARY(16)` on SQL Server).
 
-RanjId is designed for:
+RanjId is the upgrade format. It provides:
 
-* APIs and external interfaces
-* Cross-system communication
-* Interoperability with UUID-based tooling
+* **Higher capacity** — up to 32,767 nodes and 65,535 IDs per node per timestamp unit
+* **Sub-millisecond precision** — timestamp resolution down to microseconds, nanoseconds, picoseconds, or femtoseconds
+* **UUID compatibility** — accepted anywhere a UUID is expected, no column type changes needed on PostgreSQL
 
 ---
 
-## Dual Representation
+## The Upgrade Path
 
-HeerId and RanjId represent the same underlying identity in different forms.
+HeerId and RanjId share the same Snowflake structure — timestamp, node ID, and sequence — so a HeerId can always be converted into a RanjId without data loss.
 
-This allows a system to:
+This means a system can start on HeerId and migrate to RanjId when needed (node count grows, throughput exceeds HeerId's sequence limit, or sub-millisecond precision becomes necessary), without replacing existing IDs or disrupting running systems.
 
-* Store compact, efficient IDs internally (HeerId)
-* Expose portable, standard identifiers externally (RanjId)
+Conversion in the reverse direction — RanjId back to HeerId — is conditional: it succeeds only if the RanjId's values fit within HeerId's narrower limits.
 
-Conversion between the two formats is supported where possible.
-
-This separation avoids forcing a single identifier format to satisfy all use cases.
+See [conversion rules](./id-formats/conversion.md) for exact conditions.
 
 ---
 
@@ -94,8 +89,6 @@ This enables:
 * Centralized coordination when needed
 * Efficient batch allocation for bulk operations
 
-This is particularly useful in systems where multiple processes or services need to generate IDs without collisions.
-
 ---
 
 ## Cross-language design
@@ -109,20 +102,6 @@ The core logic is implemented in Rust, with bindings and integrations for:
 * .NET
 * C (FFI)
 
-This allows the same ID system to be used across different parts of a system without redefining behavior in each language.
-
----
-
-## Design goals
-
-HeeRanjID is designed with the following goals:
-
-* **Efficiency** — compact identifiers with good indexing characteristics
-* **Ordering** — time-based ordering for insert-heavy workloads
-* **Interoperability** — compatibility with UUID-based systems
-* **Consistency** — a shared format across languages and environments
-* **Flexibility** — support for both application-level and database-backed generation
-
 ---
 
 ## Further Reading
@@ -130,6 +109,6 @@ HeeRanjID is designed with the following goals:
 * [HeerId format](./id-formats/heerid.md)
 * [RanjId format](./id-formats/ranjid.md)
 * [Conversion rules](./id-formats/conversion.md)
+* [Design tradeoffs](./design/tradeoffs.md)
 * [Generation algorithm](./generation/algorithm.md)
 * [Database generation](./generation/database-generation.md)
-

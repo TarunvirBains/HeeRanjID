@@ -24,34 +24,32 @@ HeeRanjID gives you a third option.
 
 ## The ID model
 
-HeeRanjID defines two related identifier types that work together:
+HeeRanjID defines two related identifier types:
 
-### HeerId — your primary key
+### HeerId — the default format
 
-HeerId is a **64-bit, time-ordered integer** — the same size as a `bigint`. It is composed from a timestamp, a node identifier, and a sequence counter (Snowflake-style). This means:
+HeerId is a **64-bit, time-ordered integer** — the same size as a `bigint`. It is composed from a millisecond timestamp, a node identifier, and a sequence counter (Snowflake-style). This means:
 
 - Inserts are **sequential** — new rows land at the end of the index, not scattered throughout it.
 - IDs are **globally unique** across nodes without coordination.
 - You can extract **when** a record was created directly from its ID.
 - It fits in a `bigint` column — no schema changes, no UUID columns, no type casting.
 
-HeerId is designed for **internal storage** — foreign keys, joins, database indexes.
+Limits: up to **511 nodes**, **8,191 IDs per node per millisecond**.
 
-### RanjId — your external identifier
+### RanjId — the upgrade format
 
 RanjId is a **128-bit, UUIDv8-compatible identifier**. It stores in a standard `uuid` column and is accepted anywhere a UUID is expected.
 
-RanjId is not random. It encodes the same timestamp, node, and sequence components as a HeerId, which means:
+RanjId is not random. It encodes the same timestamp, node, and sequence components as a HeerId, with more headroom:
 
-- It is **time-ordered** even as a UUID.
-- It can be **converted to and from a HeerId** (where the values fit).
-- It is portable across services, APIs, and systems that expect UUIDs.
+- Up to **32,767 nodes** and **65,535 IDs per node per timestamp unit**
+- **Sub-millisecond precision** — nanoseconds by default, configurable down to femtoseconds
+- **UUID-compatible** — works in `uuid` columns, UUID form fields, admin, and DRF without extra configuration
 
-RanjId is designed for **external exposure** — APIs, webhooks, URLs, cross-service communication.
+### Migrating from HeerId to RanjId
 
-### Using them together
-
-A common pattern is to use HeerId as the database primary key and expose RanjId in your API. The conversion between them is lossless in the forward direction (HeerId → RanjId always works) and conditional in reverse (RanjId → HeerId works when the RanjId was generated from a compatible source).
+When a system outgrows HeerId's limits, it can migrate to RanjId. The conversion is lossless — every HeerId maps to exactly one RanjId — and the `HeeRanjIdConversion` migration operation handles the column type change and all foreign key updates without disrupting a running system.
 
 ---
 

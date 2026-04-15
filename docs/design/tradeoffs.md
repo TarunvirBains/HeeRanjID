@@ -87,6 +87,12 @@ These constraints are checked explicitly before conversion proceeds. There is no
 
 ---
 
+## Usage patterns
+
+Neither format is prescribed for a specific context. Some teams use HeerId for database storage and RanjId at API boundaries — this works well because the UUID string representation is stable and human-readable, while the compact integer stays close to the database. Other teams use RanjId everywhere from the start if UUID tooling compatibility matters upfront. Both are valid approaches; the important thing is that the upgrade path from HeerId to RanjId exists and is lossless if you need it later.
+
+---
+
 ## UUID Compatibility
 
 RanjId uses UUIDv8 (version bits `1000`, variant `10`). This means:
