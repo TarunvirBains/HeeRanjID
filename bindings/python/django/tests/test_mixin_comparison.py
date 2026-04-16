@@ -19,13 +19,17 @@ Tests are grouped by application concern:
 DB-backed tests require DATABASE_URL and are skipped otherwise.
 Field/form tests run without a database.
 """
+
 import os
+import pathlib
 import re
+import sys
 import uuid
 
 import django
 import pytest
 from django.conf import settings
+from django.db.models.expressions import DatabaseDefault
 
 # ── Django settings ──────────────────────────────────────────────────────────
 
@@ -70,18 +74,20 @@ if not settings.configured:
             HEERANJID_NODE_ID=1,
             SECRET_KEY="test-secret-key",
             ROOT_URLCONF="testapp.urls",
-            TEMPLATES=[{
-                "BACKEND": "django.template.backends.django.DjangoTemplates",
-                "DIRS": [],
-                "APP_DIRS": True,
-                "OPTIONS": {
-                    "context_processors": [
-                        "django.template.context_processors.request",
-                        "django.contrib.auth.context_processors.auth",
-                        "django.contrib.messages.context_processors.messages",
-                    ]
-                },
-            }],
+            TEMPLATES=[
+                {
+                    "BACKEND": "django.template.backends.django.DjangoTemplates",
+                    "DIRS": [],
+                    "APP_DIRS": True,
+                    "OPTIONS": {
+                        "context_processors": [
+                            "django.template.context_processors.request",
+                            "django.contrib.auth.context_processors.auth",
+                            "django.contrib.messages.context_processors.messages",
+                        ]
+                    },
+                }
+            ],
             MIDDLEWARE=[
                 "django.contrib.sessions.middleware.SessionMiddleware",
                 "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -98,18 +104,34 @@ if not settings.configured:
         )
     django.setup()
 
-import sys, pathlib
 # Make testapp importable when running from repo root
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
-from django.db import models as django_models
-from heeranjid import RanjId
-from heeranjid_django import HeeRanjIdFieldType, HeeRanjIdPKMixin, HeeRanjIdPrefetch
-from heeranjid_django.fields import RanjIdField
-from heeranjid_django.managers import HeeRanjIdManager
-from testapp.models import HeeRanjPost, VanillaPost
+from django.db import models as django_models  # noqa: E402
+from heeranjid import RanjId  # noqa: E402
+from testapp.models import HeeRanjPost, VanillaPost  # noqa: E402
+
+from heeranjid_django import HeeRanjIdFieldType, HeeRanjIdPKMixin, HeeRanjIdPrefetch  # noqa: E402
+from heeranjid_django.fields import RanjIdField  # noqa: E402
+from heeranjid_django.managers import HeeRanjIdManager  # noqa: E402
 
 needs_db = pytest.mark.skipif(DATABASE_URL is None, reason="DATABASE_URL not set")
+
+
+class _FakeConn:
+    class _Ops:
+        @staticmethod
+        def quote_name(value):
+            return value
+
+    def __init__(self, vendor, uuid_type="uuid"):
+        self.vendor = vendor
+        self.ops = self._Ops()
+        self.data_types = {"UUIDField": uuid_type}
+
+
+def _is_unset_pk(value):
+    return value is None or value == "" or isinstance(value, DatabaseDefault)
 
 
 # ── 1. PK field types and representations ────────────────────────────────────
@@ -134,41 +156,33 @@ class TestPkTypes:
         assert not isinstance(VanillaPost.objects, HeeRanjIdManager)
 
     def test_vanilla_pk_db_type_postgres(self):
-        class _FakeConn:
-            vendor = "postgresql"
         pk = VanillaPost._meta.pk
-        assert pk.db_type(_FakeConn()) == "uuid"
+        assert pk.db_type(_FakeConn("postgresql")) == "uuid"
 
     def test_heerranj_pk_db_type_postgres(self):
-        class _FakeConn:
-            vendor = "postgresql"
         pk = HeeRanjPost._meta.pk
-        assert pk.db_type(_FakeConn()) == "uuid"
+        assert pk.db_type(_FakeConn("postgresql")) == "uuid"
 
     def test_both_use_uuid_column_on_postgres(self):
         """Both models map to the same underlying column type on Postgres."""
-        class _FakeConn:
-            vendor = "postgresql"
-        assert VanillaPost._meta.pk.db_type(_FakeConn()) == HeeRanjPost._meta.pk.db_type(_FakeConn())
+        conn = _FakeConn("postgresql")
+        assert VanillaPost._meta.pk.db_type(conn) == HeeRanjPost._meta.pk.db_type(conn)
 
     def test_vanilla_pk_db_type_mssql(self):
-        class _FakeConn:
-            vendor = "microsoft"
         pk = VanillaPost._meta.pk
-        assert pk.db_type(_FakeConn()) == "uniqueidentifier"
+        conn = _FakeConn("microsoft", uuid_type="uniqueidentifier")
+        assert pk.db_type(conn) == "uniqueidentifier"
 
     def test_heerranj_pk_db_type_mssql(self):
         """RanjIdField uses BINARY(16) on MSSQL to preserve big-endian bit layout."""
-        class _FakeConn:
-            vendor = "microsoft"
         pk = HeeRanjPost._meta.pk
-        assert pk.db_type(_FakeConn()) == "BINARY(16)"
+        conn = _FakeConn("microsoft", uuid_type="uniqueidentifier")
+        assert pk.db_type(conn) == "BINARY(16)"
 
     def test_mssql_column_types_differ(self):
         """On MSSQL the column types diverge — this is intentional and documented."""
-        class _FakeConn:
-            vendor = "microsoft"
-        assert VanillaPost._meta.pk.db_type(_FakeConn()) != HeeRanjPost._meta.pk.db_type(_FakeConn())
+        conn = _FakeConn("microsoft", uuid_type="uniqueidentifier")
+        assert VanillaPost._meta.pk.db_type(conn) != HeeRanjPost._meta.pk.db_type(conn)
 
 
 # ── 2. String representation ─────────────────────────────────────────────────
@@ -227,8 +241,8 @@ class TestAutoAssignment:
         """SAVE mode: PK is None until save() is called (pre_save generates it)."""
         post = HeeRanjPost.__new__(HeeRanjPost)
         django_models.Model.__init__(post, title="hello")
-        # At init time the PK is not yet set in SAVE mode
-        assert post.id is None or post.id == ""
+        # Newer Django may represent an unresolved DB default with DatabaseDefault.
+        assert _is_unset_pk(post.id)
 
     def test_vanilla_explicit_pk_is_respected(self):
         explicit = uuid.UUID("12345678-1234-5678-1234-567812345678")
@@ -249,14 +263,12 @@ class TestFormFieldBehaviour:
     """Both fields accept UUID-formatted string input via forms."""
 
     def test_vanilla_formfield_accepts_uuid_string(self):
-        from django import forms
         pk = VanillaPost._meta.pk
         form_field = pk.formfield()
         result = form_field.clean("00000000-0000-8000-8000-0000006400c8")
         assert isinstance(result, uuid.UUID)
 
     def test_heerranj_formfield_accepts_uuid_string(self):
-        from django import forms
         pk = HeeRanjPost._meta.pk
         form_field = pk.formfield()
         # RanjIdField.formfield() returns a CharField (field is models.Field)
@@ -266,6 +278,7 @@ class TestFormFieldBehaviour:
 
     def test_vanilla_formfield_rejects_invalid_input(self):
         from django.core.exceptions import ValidationError
+
         pk = VanillaPost._meta.pk
         form_field = pk.formfield()
         with pytest.raises(ValidationError):
@@ -273,12 +286,13 @@ class TestFormFieldBehaviour:
 
     def test_both_formfields_use_different_base_types(self):
         from django import forms
+
         vanilla_ff = VanillaPost._meta.pk.formfield()
         heerranj_ff = HeeRanjPost._meta.pk.formfield()
-        # UUIDField formfield is forms.UUIDField; RanjIdField formfield is a CharField
+        # The custom field preserves UUIDField validation but uses a distinct subclass.
         assert isinstance(vanilla_ff, forms.UUIDField)
-        # RanjIdField is models.Field, so formfield is a CharField
-        assert not isinstance(heerranj_ff, forms.UUIDField)
+        assert isinstance(heerranj_ff, forms.UUIDField)
+        assert type(heerranj_ff) is not forms.UUIDField
 
     def test_vanilla_prep_value_returns_uuid(self):
         pk = VanillaPost._meta.pk
@@ -300,7 +314,8 @@ class TestFormFieldBehaviour:
         heerranj_val = heerranj_pk.get_prep_value(
             RanjId.from_str("00000000-0000-8000-8000-0000006400c8")
         )
-        assert type(vanilla_val) == type(heerranj_val) == uuid.UUID
+        assert type(vanilla_val) is uuid.UUID
+        assert type(heerranj_val) is uuid.UUID
 
 
 # ── 5. Admin URL compatibility ────────────────────────────────────────────────
@@ -337,12 +352,6 @@ class TestOrderingGuarantees:
 
     def test_ranjid_string_sort_matches_time_order(self):
         """RanjIds generated in sequence sort correctly as strings."""
-        import time
-        ids = []
-        for _ in range(5):
-            # Generate via the Rust library (no DB needed)
-            # We can't call the DB here, so we just verify the property on known values
-            pass
         # Use known monotonic examples
         earlier = RanjId.from_str("00000001-0000-8000-8000-000000010001")
         later = RanjId.from_str("00000002-0000-8000-8000-000000010001")
@@ -392,13 +401,13 @@ class TestSerialization:
         u = uuid.UUID(str(rid))
         assert u.version == 8
 
-    def test_both_pks_round_trip_through_prep_value_and_from_db(self):
+    def test_both_pks_round_trip_through_prep_value_and_python_conversion(self):
         vanilla_pk = VanillaPost._meta.pk
         heerranj_pk = HeeRanjPost._meta.pk
 
         u = uuid.uuid4()
         vanilla_prep = vanilla_pk.get_prep_value(u)
-        vanilla_back = vanilla_pk.from_db_value(str(vanilla_prep), None, None)
+        vanilla_back = vanilla_pk.to_python(str(vanilla_prep))
         assert str(vanilla_back) == str(u)
 
         rid = RanjId.from_str("00000000-0000-8000-8000-0000006400c8")
@@ -413,9 +422,9 @@ class TestSerialization:
 @pytest.fixture(scope="module")
 def db_tables():
     """Create VanillaPost and HeeRanjPost tables for the test session."""
+    from django.core.management import call_command
     from django.db import connection
     from django.test.utils import setup_test_environment
-    from django.core.management import call_command
 
     setup_test_environment()
     call_command("migrate", "--run-syncdb", verbosity=0)
@@ -492,7 +501,9 @@ class TestDbCreation:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.INIT
+
             title = django_models.CharField(max_length=100, default="")
+
             class Meta:
                 app_label = "testapp_init"
 
@@ -528,13 +539,15 @@ class TestPrefetchModes:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.SAVE
+
             title = django_models.CharField(max_length=100, default="")
+
             class Meta:
                 app_label = "testapp_meta"
 
         instance = SaveModel.__new__(SaveModel)
         django_models.Model.__init__(instance, title="test")
-        assert instance.id is None
+        assert _is_unset_pk(instance.id)
 
     def test_manual_mode_does_not_auto_generate(self):
         from heeranjid_django import HeeRanjIdFieldType, HeeRanjIdPKMixin, HeeRanjIdPrefetch
@@ -543,7 +556,9 @@ class TestPrefetchModes:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.MANUAL
+
             title = django_models.CharField(max_length=100, default="")
+
             class Meta:
                 app_label = "testapp_meta"
 
@@ -552,7 +567,7 @@ class TestPrefetchModes:
         # pre_save in MANUAL mode should NOT generate an ID
         pk_field = ManualModel._meta.pk
         result = pk_field.pre_save(instance, add=True)
-        assert result is None, f"MANUAL mode should not auto-generate; got {result!r}"
+        assert _is_unset_pk(result), f"MANUAL mode should not auto-generate; got {result!r}"
 
     def test_manual_mode_respects_explicit_assignment(self):
         from heeranjid_django import HeeRanjIdFieldType, HeeRanjIdPKMixin, HeeRanjIdPrefetch
@@ -561,7 +576,9 @@ class TestPrefetchModes:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.MANUAL
+
             title = django_models.CharField(max_length=100, default="")
+
             class Meta:
                 app_label = "testapp_meta2"
 
@@ -578,6 +595,7 @@ class TestPrefetchModes:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.MANUAL
+
             class Meta:
                 app_label = "testapp_meta3"
 
@@ -590,6 +608,7 @@ class TestPrefetchModes:
             class HeeRanjId:
                 field_type = HeeRanjIdFieldType.RANJID
                 prefetch = HeeRanjIdPrefetch.SAVE
+
             class Meta:
                 app_label = "testapp_meta4"
 
