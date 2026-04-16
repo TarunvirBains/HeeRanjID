@@ -24,6 +24,7 @@ import uuid
 import pytest
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 if DATABASE_URL is None:
     pytest.skip("DATABASE_URL not set — skipping Playwright admin tests", allow_module_level=True)
@@ -149,13 +150,13 @@ def django_db_setup():
             editor.create_model(HeeRanjPost)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def admin_user(django_db_setup):
-    """Create a Django admin superuser for the test session."""
+    """Create a Django admin superuser for the current test."""
     from django.contrib.auth.models import User
     username = "playwright_admin"
-    if not User.objects.filter(username=username).exists():
-        User.objects.create_superuser(username, "admin@test.com", "playwright_password")
+    User.objects.filter(username=username).delete()
+    User.objects.create_superuser(username, "admin@test.com", "playwright_password")
     return {"username": username, "password": "playwright_password"}
 
 
@@ -221,11 +222,11 @@ class TestHeeRanjPostAdmin:
     def test_can_create_heerranj_post_in_admin(self, page, live_server_url, admin_user):
         _login(page, live_server_url, admin_user)
 
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/add/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/add/")
         page.fill("#id_title", "Playwright HeeRanjPost")
         page.get_by_role("button", name="Save").first.click()
 
-        assert "heerranjpost" in page.url
+        assert "heeranjpost" in page.url
 
     @pytest.mark.django_db(transaction=True)
     def test_heerranj_post_pk_is_ranjid_after_admin_save(self, page, live_server_url, admin_user):
@@ -234,7 +235,7 @@ class TestHeeRanjPostAdmin:
         from heeranjid import RanjId
 
         _login(page, live_server_url, admin_user)
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/add/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/add/")
         page.fill("#id_title", "PK Check Post")
         page.get_by_role("button", name="Save").first.click()
 
@@ -250,7 +251,7 @@ class TestHeeRanjPostAdmin:
         pk_str = str(post.pk)
 
         _login(page, live_server_url, admin_user)
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/{pk_str}/change/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/{pk_str}/change/")
         assert page.get_by_label("Title").input_value() == "URL Test HeeRanj"
 
     @pytest.mark.django_db(transaction=True)
@@ -259,7 +260,7 @@ class TestHeeRanjPostAdmin:
         HeeRanjPost.objects.create(title="Changelist Test HeeRanj")
 
         _login(page, live_server_url, admin_user)
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/")
         assert "Changelist Test HeeRanj" in page.content()
 
 
@@ -276,7 +277,7 @@ class TestAdminComparison:
         page.goto(f"{live_server_url}/admin/testapp/vanillapost/add/")
         vanilla_has_title = page.locator("#id_title").count() > 0
 
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/add/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/add/")
         heerranj_has_title = page.locator("#id_title").count() > 0
 
         assert vanilla_has_title
@@ -286,7 +287,7 @@ class TestAdminComparison:
     def test_both_add_pages_have_save_button(self, page, live_server_url, admin_user):
         _login(page, live_server_url, admin_user)
 
-        for model_slug in ("vanillapost", "heerranjpost"):
+        for model_slug in ("vanillapost", "heeranjpost"):
             page.goto(f"{live_server_url}/admin/testapp/{model_slug}/add/")
             assert page.get_by_role("button", name="Save").count() > 0
 
@@ -303,5 +304,5 @@ class TestAdminComparison:
         # The id field is readonly — no <input> with name="id"
         assert page.locator('input[name="id"]').count() == 0
 
-        page.goto(f"{live_server_url}/admin/testapp/heerranjpost/{hp.pk}/change/")
+        page.goto(f"{live_server_url}/admin/testapp/heeranjpost/{hp.pk}/change/")
         assert page.locator('input[name="id"]').count() == 0
