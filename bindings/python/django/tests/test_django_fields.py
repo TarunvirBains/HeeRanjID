@@ -89,6 +89,7 @@ class _FakeConnection:
     def __init__(self, vendor):
         self.vendor = vendor
         self.ops = self._Ops()
+        self.data_types = {"UUIDField": "uuid"}
 
 
 class TestRanjIdField:
