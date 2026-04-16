@@ -35,13 +35,15 @@ def forwards(apps, schema_editor):
                 if batch and batch != "GO":
                     schema_editor.execute(batch)
         else:
-            schema_editor.execute(part)
+            with schema_editor.connection.cursor() as cursor:
+                cursor.execute(part)
 
     # After all SQL parts are executed, call heer_configure() to bake in epoch/precision
     if backend == "mssql":
         schema_editor.execute("EXEC heer_configure")
     else:
-        schema_editor.execute("SELECT heer_configure()")
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute("SELECT heer_configure()")
 
 
 def backwards(apps, schema_editor):
@@ -85,7 +87,11 @@ def backwards(apps, schema_editor):
         ]
 
     for stmt in drops:
-        schema_editor.execute(stmt)
+        if vendor == "microsoft":
+            schema_editor.execute(stmt)
+        else:
+            with schema_editor.connection.cursor() as cursor:
+                cursor.execute(stmt)
 
 
 class Migration(migrations.Migration):

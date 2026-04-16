@@ -105,9 +105,48 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 @pytest.fixture(scope="session")
 def django_db_setup():
-    """Migrate the database (installs HeeRanjID schema + testapp tables)."""
+    """Prepare built-in admin tables plus HeeRanjID SQL and testapp models."""
     from django.core.management import call_command
-    call_command("migrate", verbosity=0)
+    from django.db import connection
+    from heeranjid.sql import postgres as pg_sql
+    from testapp.models import HeeRanjPost, VanillaPost
+
+    for app_label in ("contenttypes", "auth", "admin", "sessions"):
+        call_command("migrate", app_label, verbosity=0)
+
+    with connection.cursor() as cur:
+        for sql in [
+            pg_sql.SCHEMA,
+            pg_sql.SESSION,
+            pg_sql.GENERATE_HEERID,
+            pg_sql.GENERATE_RANJID,
+            pg_sql.SEED,
+        ]:
+            cur.execute(sql)
+        cur.execute(pg_sql.CONFIGURE)
+        cur.execute(
+            """
+            INSERT INTO heer_config (id, epoch, precision)
+            VALUES (1, '2026-01-01T00:00:00', 'us')
+            ON CONFLICT (id) DO UPDATE
+            SET epoch = EXCLUDED.epoch, precision = EXCLUDED.precision
+            """
+        )
+        cur.execute("SELECT heer_configure()")
+        cur.execute(
+            """
+            INSERT INTO heer_nodes (node_id, name, description, is_active)
+            VALUES (2, 'test-node-2', 'Second test node', true)
+            ON CONFLICT (node_id) DO NOTHING
+            """
+        )
+
+    existing_tables = set(connection.introspection.table_names())
+    with connection.schema_editor() as editor:
+        if VanillaPost._meta.db_table not in existing_tables:
+            editor.create_model(VanillaPost)
+        if HeeRanjPost._meta.db_table not in existing_tables:
+            editor.create_model(HeeRanjPost)
 
 
 @pytest.fixture(scope="session")
