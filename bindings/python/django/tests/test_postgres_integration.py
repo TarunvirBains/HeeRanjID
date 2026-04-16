@@ -25,6 +25,18 @@ from heeranjid import HeerId, RanjId
 # ── Fixtures ──
 
 
+class _FakeConnection:
+    class _Ops:
+        @staticmethod
+        def quote_name(value):
+            return value
+
+    def __init__(self, vendor, uuid_type="uuid"):
+        self.vendor = vendor
+        self.ops = self._Ops()
+        self.data_types = {"UUIDField": uuid_type}
+
+
 @pytest.fixture(scope="module")
 def pg_conn():
     """Connect to Postgres and install schema."""
@@ -309,15 +321,12 @@ class TestDjangoFieldsPostgres:
         assert restored.node_id == original.node_id
         assert restored.sequence == original.sequence
 
-    def test_ranjid_field_db_type_postgres(self, cursor):
+    def test_ranjid_field_db_type_postgres(self):
         """RanjIdField returns UUID for Postgres vendor."""
         from heeranjid_django.fields import RanjIdField
 
-        class _FakeConn:
-            vendor = "postgresql"
-
         field = RanjIdField()
-        assert field.db_type(_FakeConn()) == "uuid"
+        assert field.db_type(_FakeConnection("postgresql")) == "uuid"
 
 
 # ── Concurrency ──

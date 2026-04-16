@@ -26,6 +26,18 @@ from heeranjid import HeerId, RanjId
 # ── Fixtures ──
 
 
+class _FakeConnection:
+    class _Ops:
+        @staticmethod
+        def quote_name(value):
+            return value
+
+    def __init__(self, vendor, uuid_type="uniqueidentifier"):
+        self.vendor = vendor
+        self.ops = self._Ops()
+        self.data_types = {"UUIDField": uuid_type}
+
+
 @pytest.fixture(scope="module")
 def mssql_conn():
     """Connect to MSSQL and install schema."""
@@ -367,15 +379,12 @@ class TestDjangoFieldsMssql:
         assert restored.node_id == original.node_id
         assert restored.sequence == original.sequence
 
-    def test_ranjid_field_db_type_mssql(self, cursor):
+    def test_ranjid_field_db_type_mssql(self):
         """RanjIdField returns BINARY(16) for MSSQL vendor."""
         from heeranjid_django.fields import RanjIdField
 
-        class _FakeConn:
-            vendor = "microsoft"
-
         field = RanjIdField()
-        assert field.db_type(_FakeConn()) == "BINARY(16)"
+        assert field.db_type(_FakeConnection("microsoft")) == "BINARY(16)"
 
 
 # ── Concurrency ──
