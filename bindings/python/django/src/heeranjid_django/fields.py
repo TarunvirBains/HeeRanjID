@@ -3,8 +3,14 @@ import uuid as uuid_mod
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from django.db.models.expressions import RawSQL
+from django.db.models.expressions import DatabaseDefault, RawSQL
 from heeranjid import HeerId, RanjId
+
+
+def _normalize_pending_db_default(value):
+    if isinstance(value, DatabaseDefault):
+        return None
+    return value
 
 
 class RanjIdFormField(forms.UUIDField):
@@ -46,13 +52,14 @@ class HeerIdField(models.BigIntegerField):
         class_prepared.connect(check_manager, sender=cls, weak=False)
 
     def pre_save(self, model_instance, add):
-        value = getattr(model_instance, self.attname, None)
+        value = _normalize_pending_db_default(getattr(model_instance, self.attname, None))
         if value is not None:
             return value
         if not add:
             return value
         # MANUAL mode: do not auto-generate; let the caller assign the PK.
         if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
+            setattr(model_instance, self.attname, None)
             return value
 
         from django.db import connection
@@ -82,6 +89,11 @@ class HeerIdField(models.BigIntegerField):
         if isinstance(value, HeerId):
             return value.as_int()
         return int(value)
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if not prepared:
+            value = self.get_prep_value(value)
+        return value
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
@@ -118,13 +130,14 @@ class RanjIdField(models.UUIDField):
         return super().db_type(connection)  # native uuid on Postgres
 
     def pre_save(self, model_instance, add):
-        value = getattr(model_instance, self.attname, None)
+        value = _normalize_pending_db_default(getattr(model_instance, self.attname, None))
         if value is not None:
             return value
         if not add:
             return value
         # MANUAL mode: do not auto-generate; let the caller assign the PK.
         if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
+            setattr(model_instance, self.attname, None)
             return value
 
         from django.db import connection
@@ -176,6 +189,11 @@ class RanjIdField(models.UUIDField):
         if isinstance(value, uuid_mod.UUID):
             return value
         return uuid_mod.UUID(str(value))
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if not prepared:
+            value = self.get_prep_value(value)
+        return value
 
     def formfield(self, **kwargs):
         return super().formfield(**{"form_class": RanjIdFormField, **kwargs})

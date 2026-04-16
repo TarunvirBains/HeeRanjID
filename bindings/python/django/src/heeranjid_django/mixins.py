@@ -1,6 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.base import ModelBase
+from django.db.models.expressions import DatabaseDefault
 
 from heeranjid_django.enums import HeeRanjIdFieldType, HeeRanjIdPrefetch
 from heeranjid_django.fields import HeerIdField, RanjIdField
@@ -12,7 +13,8 @@ def _post_init_generate_id(sender, instance, **kwargs):
     pk_field = instance._meta.pk
     if pk_field is None:
         return
-    if getattr(instance, pk_field.attname, None) is None:
+    value = getattr(instance, pk_field.attname, None)
+    if value is None or isinstance(value, DatabaseDefault):
         # Reuse pre_save logic with add=True to generate and assign the ID
         pk_field.pre_save(instance, add=True)
 

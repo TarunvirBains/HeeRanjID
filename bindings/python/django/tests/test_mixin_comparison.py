@@ -422,12 +422,39 @@ class TestSerialization:
 @pytest.fixture(scope="module")
 def db_tables():
     """Create VanillaPost and HeeRanjPost tables for the test session."""
-    from django.core.management import call_command
     from django.db import connection
-    from django.test.utils import setup_test_environment
+    from heeranjid.sql import postgres as pg_sql
 
-    setup_test_environment()
-    call_command("migrate", "--run-syncdb", verbosity=0)
+    with connection.cursor() as cur:
+        for sql in [
+            pg_sql.SCHEMA,
+            pg_sql.SESSION,
+            pg_sql.GENERATE_HEERID,
+            pg_sql.GENERATE_RANJID,
+            pg_sql.SEED,
+        ]:
+            cur.execute(sql)
+        cur.execute(pg_sql.CONFIGURE)
+        cur.execute(
+            """
+            INSERT INTO heer_config (id, epoch, precision)
+            VALUES (1, '2026-01-01T00:00:00', 'us')
+            ON CONFLICT (id) DO UPDATE
+            SET epoch = EXCLUDED.epoch, precision = EXCLUDED.precision
+            """
+        )
+        cur.execute("SELECT heer_configure()")
+        cur.execute(
+            """
+            INSERT INTO heer_nodes (node_id, name, description, is_active)
+            VALUES (2, 'test-node-2', 'Second test node', true)
+            ON CONFLICT (node_id) DO NOTHING
+            """
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(VanillaPost)
+        editor.create_model(HeeRanjPost)
     yield
     with connection.schema_editor() as editor:
         try:
