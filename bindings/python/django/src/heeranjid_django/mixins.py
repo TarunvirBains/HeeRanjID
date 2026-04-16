@@ -72,6 +72,7 @@ class HeeRanjIdMeta(ModelBase):
             and getattr(config, "prefetch", HeeRanjIdPrefetch.SAVE) == HeeRanjIdPrefetch.INIT
         ):
             from django.db.models.signals import post_init
+
             post_init.connect(_post_init_generate_id, sender=cls, weak=False)
 
         return cls
