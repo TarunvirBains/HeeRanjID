@@ -18,12 +18,12 @@ if not settings.configured:
     )
     django.setup()
 
-import pytest
 from heeranjid import HeerId, RanjId
+
 from heeranjid_django.fields import HeerIdField, RanjIdField
 
-
 # ── HeerIdField ──
+
 
 class TestHeerIdField:
     def test_internal_type(self):
@@ -61,7 +61,12 @@ class TestHeerIdField:
         field = HeerIdField()
         # db_default should not be set automatically
         from django.db import models as _models
-        assert not hasattr(field, '_db_default_set') or field.db_default is _models.NOT_PROVIDED if hasattr(_models, 'NOT_PROVIDED') else True
+
+        assert (
+            not hasattr(field, "_db_default_set") or field.db_default is _models.NOT_PROVIDED
+            if hasattr(_models, "NOT_PROVIDED")
+            else True
+        )
 
     def test_deconstruct_path(self):
         field = HeerIdField()
@@ -72,10 +77,18 @@ class TestHeerIdField:
 
 # ── RanjIdField ──
 
+
 class _FakeConnection:
     """Minimal connection stub for db_type tests."""
+
+    class _Ops:
+        @staticmethod
+        def quote_name(name):
+            return name
+
     def __init__(self, vendor):
         self.vendor = vendor
+        self.ops = self._Ops()
 
 
 class TestRanjIdField:
