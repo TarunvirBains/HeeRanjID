@@ -1,13 +1,18 @@
-.PHONY: dev build clean copy-sql
+.PHONY: dev build clean copy-sql clean-wheels
 
 SQL_SRC := ../../sql
 SQL_DEST := python/heeranjid/sql
+WHEEL_DIR := ../../target/wheels
 
 dev: copy-sql
 	maturin develop
 
-build: copy-sql
+build: clean-wheels copy-sql
 	maturin build --release
+
+clean-wheels:
+	rm -rf $(WHEEL_DIR)
+	mkdir -p $(WHEEL_DIR)
 
 copy-sql:
 	mkdir -p $(SQL_DEST)/postgres $(SQL_DEST)/mssql

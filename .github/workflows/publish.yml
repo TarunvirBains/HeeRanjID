@@ -53,6 +53,8 @@ jobs:
       - name: Build and publish Linux wheel
         run: |
           cd bindings/python
+          rm -rf ../../target/wheels
+          mkdir -p ../../target/wheels
           mkdir -p python/heeranjid/sql/postgres python/heeranjid/sql/mssql
           cp ../../sql/postgres/schema.sql ../../sql/postgres/seed.sql ../../sql/postgres/install.sql python/heeranjid/sql/postgres/
           cp ../../sql/postgres/functions/*.sql python/heeranjid/sql/postgres/
@@ -80,6 +82,8 @@ jobs:
       - name: Copy SQL files
         shell: bash
         run: |
+          rm -rf target/wheels
+          mkdir -p target/wheels
           mkdir -p bindings/python/python/heeranjid/sql/postgres
           mkdir -p bindings/python/python/heeranjid/sql/mssql
           cp sql/postgres/schema.sql sql/postgres/seed.sql sql/postgres/install.sql bindings/python/python/heeranjid/sql/postgres/

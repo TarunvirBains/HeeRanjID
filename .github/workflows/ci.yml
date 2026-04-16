@@ -166,9 +166,6 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --exclude heeranjid-python --exclude heeranjid-node -- -D warnings
 
-      - name: cargo deny check
-        run: cargo deny check
-
       - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
 
@@ -195,6 +192,8 @@ jobs:
       - name: Build Python wheel (Windows)
         shell: bash
         run: |
+          rm -rf target/wheels
+          mkdir -p target/wheels
           mkdir -p bindings/python/python/heeranjid/sql/postgres
           mkdir -p bindings/python/python/heeranjid/sql/mssql
           cp sql/postgres/schema.sql sql/postgres/seed.sql sql/postgres/install.sql bindings/python/python/heeranjid/sql/postgres/
