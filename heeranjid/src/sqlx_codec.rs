@@ -122,10 +122,10 @@ mod tests {
         let raw: i64 = id.as_i64();
 
         let mut our_buf = PgArgumentBuffer::default();
-        <HeerId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
+        let _ = <HeerId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
 
         let mut ref_buf = PgArgumentBuffer::default();
-        <i64 as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
+        let _ = <i64 as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
 
         assert_eq!(&**our_buf, &**ref_buf);
     }
@@ -136,10 +136,10 @@ mod tests {
         let raw: Uuid = id.as_uuid();
 
         let mut our_buf = PgArgumentBuffer::default();
-        <RanjId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
+        let _ = <RanjId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
 
         let mut ref_buf = PgArgumentBuffer::default();
-        <Uuid as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
+        let _ = <Uuid as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
 
         assert_eq!(&**our_buf, &**ref_buf);
     }
