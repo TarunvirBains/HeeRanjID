@@ -13,11 +13,11 @@ readme = "README.md"
 include = ["src/**/*", "sql/**/*.sql", "README.md", "Cargo.toml"]
 
 [dependencies]
-heeranjid = { version = "0.1.1", path = "../heeranjid", features = ["sqlx"] }
+heeranjid = { version = "0.1.2", path = "../heeranjid", features = ["sqlx"] }
 sqlx.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-heeranjid = { version = "0.1.1", path = "../heeranjid", features = ["sqlx"] }
+heeranjid = { version = "0.1.2", path = "../heeranjid", features = ["sqlx"] }
 tokio.workspace = true

@@ -80,3 +80,67 @@ impl Encode<'_, Postgres> for RanjId {
         <Uuid as Encode<Postgres>>::encode_by_ref(&self.as_uuid(), buf)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Unit tests for the codec. These do NOT hit Postgres — `PgValueRef`
+    //! cannot be constructed without a live connection (its fields are
+    //! crate-private in sqlx), so the Decode path is covered by the
+    //! integration tests in `heeranjid-sqlx`. Here we assert:
+    //!
+    //! 1. `Type::type_info()` matches the underlying Postgres column type.
+    //! 2. `Encode::encode_by_ref` writes the same byte buffer the underlying
+    //!    primitive's `Encode` would — i.e. we're a transparent wrapper at
+    //!    the wire level and not silently changing the column layout.
+    //!
+    //! Combined with the existing `from_i64` / `from_uuid` validation tests
+    //! (UUIDv4/v7 rejection, negative HeerId rejection), this gives full
+    //! coverage of every codec edge case without standing up a database.
+    use super::*;
+    use crate::RanjPrecision;
+    use sqlx::Type;
+
+    #[test]
+    fn heerid_type_info_matches_bigint() {
+        assert_eq!(
+            <HeerId as Type<Postgres>>::type_info(),
+            <i64 as Type<Postgres>>::type_info(),
+        );
+    }
+
+    #[test]
+    fn ranjid_type_info_matches_uuid() {
+        assert_eq!(
+            <RanjId as Type<Postgres>>::type_info(),
+            <Uuid as Type<Postgres>>::type_info(),
+        );
+    }
+
+    #[test]
+    fn heerid_encode_matches_i64_wire_format() {
+        let id = HeerId::new(1_234_567_890, 42, 7).unwrap();
+        let raw: i64 = id.as_i64();
+
+        let mut our_buf = PgArgumentBuffer::default();
+        <HeerId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
+
+        let mut ref_buf = PgArgumentBuffer::default();
+        <i64 as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
+
+        assert_eq!(&**our_buf, &**ref_buf);
+    }
+
+    #[test]
+    fn ranjid_encode_matches_uuid_wire_format() {
+        let id = RanjId::new(42, RanjPrecision::Microseconds, 7, 1).unwrap();
+        let raw: Uuid = id.as_uuid();
+
+        let mut our_buf = PgArgumentBuffer::default();
+        <RanjId as Encode<Postgres>>::encode_by_ref(&id, &mut our_buf).unwrap();
+
+        let mut ref_buf = PgArgumentBuffer::default();
+        <Uuid as Encode<Postgres>>::encode_by_ref(&raw, &mut ref_buf).unwrap();
+
+        assert_eq!(&**our_buf, &**ref_buf);
+    }
+}
