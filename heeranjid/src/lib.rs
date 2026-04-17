@@ -12,6 +12,9 @@ mod precision;
 mod ranj;
 mod serde_helpers;
 
+#[cfg(feature = "sqlx")]
+mod sqlx_codec;
+
 pub use convert::{ConflictKind, ConversionConflict, ConversionError};
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
@@ -58,6 +61,33 @@ mod tests {
         let random = Uuid::nil();
         let error = RanjId::from_uuid(random).unwrap_err();
 
+        assert_eq!(error, Error::InvalidRanjIdVersion);
+    }
+
+    #[test]
+    fn ranjid_rejects_uuid_v4() {
+        // UUIDv4 (random) — common, but not what RanjId carries. Construct
+        // by hand rather than `Uuid::new_v4()` so this crate doesn't need
+        // the optional `v4` feature of `uuid` to compile its tests.
+        // Version nibble at bits 76-79 = 0x4, variant at 62-63 = 0b10.
+        let raw: u128 = (0x4u128 << 76) | (0x2u128 << 62);
+        let v4 = Uuid::from_u128(raw);
+        assert_eq!(v4.get_version_num(), 4);
+        let error = RanjId::from_uuid(v4).unwrap_err();
+        assert_eq!(error, Error::InvalidRanjIdVersion);
+    }
+
+    #[test]
+    fn ranjid_rejects_uuid_v7() {
+        // UUIDv7 is time-ordered too but is a distinct standard — RanjId is
+        // UUIDv8 (custom layout with precision + node_id bits), so v7 inputs
+        // must be rejected to avoid silently deserializing foreign data.
+        // Construct a v7 by hand: version nibble at bits 76-79 = 0x7,
+        // variant bits at 62-63 = 0b10 (RFC 4122).
+        let raw: u128 = (0x7u128 << 76) | (0x2u128 << 62);
+        let v7 = Uuid::from_u128(raw);
+        assert_eq!(v7.get_version_num(), 7);
+        let error = RanjId::from_uuid(v7).unwrap_err();
         assert_eq!(error, Error::InvalidRanjIdVersion);
     }
 
