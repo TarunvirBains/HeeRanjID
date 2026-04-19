@@ -15,7 +15,7 @@ readme = "README.md"
 crate-type = ["cdylib"]
 
 [dependencies]
-heeranjid = { version = "0.1.2", path = "../heeranjid", default-features = false }
+heeranjid = { version = "0.1.3", path = "../heeranjid", default-features = false }
 uuid = "1"
 
 [features]
