@@ -14,8 +14,7 @@
 //! # Why here
 //! Rust's orphan rules require that at least one of the trait or type in an
 //! impl is defined in the current crate. Since `HeerId` and `RanjId` are
-//! defined in this crate, the impls live here behind the `sqlx` feature flag.
-//! Enable with `heeranjid = { features = ["sqlx"] }`.
+//! defined in this crate, the impls live in `heeranjid` directly.
 
 use sqlx::{
     Decode, Encode,

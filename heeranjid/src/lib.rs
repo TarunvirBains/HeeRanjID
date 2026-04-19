@@ -11,8 +11,6 @@ mod heer;
 mod precision;
 mod ranj;
 mod serde_helpers;
-
-#[cfg(feature = "sqlx")]
 mod sqlx_codec;
 
 pub use convert::{ConflictKind, ConversionConflict, ConversionError};

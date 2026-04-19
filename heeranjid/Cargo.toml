@@ -15,10 +15,8 @@ readme = "README.md"
 serde.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
-sqlx = { workspace = true, optional = true }
-
-[features]
-sqlx = ["dep:sqlx"]
+sqlx.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+sqlx.workspace = true
