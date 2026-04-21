@@ -10,6 +10,8 @@ mod error;
 mod heer;
 #[cfg(feature = "postgres")]
 pub mod postgres_codec;
+#[cfg(feature = "postgres")]
+pub mod postgres_schema;
 mod precision;
 mod ranj;
 mod serde_helpers;
