@@ -8,9 +8,12 @@
 mod convert;
 mod error;
 mod heer;
+#[cfg(feature = "postgres")]
+pub mod postgres_codec;
 mod precision;
 mod ranj;
 mod serde_helpers;
+#[cfg(feature = "sqlx")]
 mod sqlx_codec;
 
 pub use convert::{ConflictKind, ConversionConflict, ConversionError};

@@ -11,12 +11,21 @@ keywords = ["distributed", "id", "uuid", "snowflake", "heerid"]
 categories = ["data-structures", "database"]
 readme = "README.md"
 
+[features]
+default = []
+sqlx = ["dep:sqlx"]
+postgres = ["dep:postgres-types", "dep:bytes"]
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
-sqlx.workspace = true
+sqlx = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+postgres-types = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true
 sqlx.workspace = true
+tokio-postgres.workspace = true
+tokio.workspace = true
