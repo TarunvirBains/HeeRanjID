@@ -37,6 +37,19 @@ use tokio_postgres::GenericClient;
 
 use crate::{HeerId, RanjId};
 
+fn map_pg_error(err: tokio_postgres::Error) -> GenerateError {
+    if let Some(db_err) = err.as_db_error() {
+        let message = db_err.message().to_string();
+        match db_err.code().code() {
+            "50021" => return GenerateError::LogicalDrift { message },
+            "50020" => return GenerateError::ClockRollback { message },
+            "50022" => return GenerateError::HardClockRollback { message },
+            _ => {}
+        }
+    }
+    GenerateError::Database(err)
+}
+
 /// Error returned by the [`postgres_generate`](self) helpers.
 ///
 /// Shape mirrors `heeranjid_sqlx::GenerateError` so callers can swap
@@ -56,6 +69,15 @@ pub enum GenerateError {
     /// [`RanjId::from_uuid`] validation (wrong version or variant).
     #[error("database returned invalid RanjId: {0}")]
     InvalidRanjId(#[source] crate::Error),
+    /// Logical future drift detected (batch-induced, < 2ms / < 2000µs).
+    #[error("logical future drift (batch-induced): {message}")]
+    LogicalDrift { message: String },
+    /// Soft clock rollback detected (2-50ms / 2000-50000µs).
+    #[error("clock rollback: {message}")]
+    ClockRollback { message: String },
+    /// Hard clock rollback detected (>= 50ms / >= 50000µs).
+    #[error("hard clock rollback: {message}")]
+    HardClockRollback { message: String },
     /// Underlying `tokio-postgres` transport or SQL error.
     #[error("database error: {0}")]
     Database(#[from] tokio_postgres::Error),
@@ -80,7 +102,8 @@ where
 {
     let row = client
         .query_one("SELECT generate_id($1)", &[&i32::from(node_id)])
-        .await?;
+        .await
+        .map_err(map_pg_error)?;
     let raw: i64 = row.get(0);
     HeerId::from_i64(raw).map_err(GenerateError::InvalidHeerId)
 }
@@ -105,7 +128,8 @@ where
 {
     let row = client
         .query_one("SELECT generate_ranjid($1)", &[&i32::from(node_id)])
-        .await?;
+        .await
+        .map_err(map_pg_error)?;
     let uuid: uuid::Uuid = row.get(0);
     RanjId::from_uuid(uuid).map_err(GenerateError::InvalidRanjId)
 }
@@ -141,7 +165,8 @@ where
             "SELECT id FROM generate_ids($1::integer, $2::integer)",
             &[&i32::from(node_id), &count],
         )
-        .await?;
+        .await
+        .map_err(map_pg_error)?;
     rows.into_iter()
         .map(|row| {
             let raw: i64 = row.get(0);
@@ -179,7 +204,8 @@ where
             "SELECT id FROM generate_ranjids($1::integer, $2::integer)",
             &[&i32::from(node_id), &count],
         )
-        .await?;
+        .await
+        .map_err(map_pg_error)?;
     rows.into_iter()
         .map(|row| {
             let uuid: uuid::Uuid = row.get(0);

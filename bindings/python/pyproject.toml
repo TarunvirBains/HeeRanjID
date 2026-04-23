@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "heeranjid"
-version = "0.3.2"
+version = "0.3.3"
 description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit UUIDv8) with configurable precision"
 readme = "README.md"
 requires-python = ">=3.10"

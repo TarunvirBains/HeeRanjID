@@ -1079,3 +1079,203 @@ async fn ranjid_session_supports_large_node_ids() {
     // Must be strictly increasing
     assert!(ranj_ids.windows(2).all(|pair| pair[0] < pair[1]));
 }
+
+#[tokio::test]
+async fn generate_heerid_surfaces_logical_drift() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Set last_id_time to 1ms in the future (< 2ms threshold for logical drift)
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id, last_id_time, last_sequence)
+           SELECT 1,
+                  (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+                   - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 1,
+                  0"#,
+    )
+    .await
+    .unwrap();
+
+    let error = heeranjid_sqlx::generate_heerid(&mut conn, 1)
+        .await
+        .unwrap_err();
+
+    match error {
+        heeranjid_sqlx::GenerateError::LogicalDrift { .. } => {
+            // Expected
+        }
+        _ => panic!("expected LogicalDrift, got {:?}", error),
+    }
+}
+
+#[tokio::test]
+async fn generate_heerid_surfaces_clock_rollback() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Set last_id_time to 10ms in the future (soft rollback band: 2-50ms)
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id, last_id_time, last_sequence)
+           SELECT 1,
+                  (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+                   - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 10,
+                  0"#,
+    )
+    .await
+    .unwrap();
+
+    let error = heeranjid_sqlx::generate_heerid(&mut conn, 1)
+        .await
+        .unwrap_err();
+
+    match error {
+        heeranjid_sqlx::GenerateError::ClockRollback { .. } => {
+            // Expected
+        }
+        _ => panic!("expected ClockRollback, got {:?}", error),
+    }
+}
+
+#[tokio::test]
+async fn generate_heerid_surfaces_hard_clock_rollback() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    // Set last_id_time to 100ms in the future (hard rollback band: >= 50ms)
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id, last_id_time, last_sequence)
+           SELECT 1,
+                  (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+                   - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 100,
+                  0"#,
+    )
+    .await
+    .unwrap();
+
+    let error = heeranjid_sqlx::generate_heerid(&mut conn, 1)
+        .await
+        .unwrap_err();
+
+    match error {
+        heeranjid_sqlx::GenerateError::HardClockRollback { .. } => {
+            // Expected
+        }
+        _ => panic!("expected HardClockRollback, got {:?}", error),
+    }
+}
+
+#[tokio::test]
+async fn ranjid_sql_rejects_clock_rollback_typed() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    install_schema(&mut conn).await.unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, is_active) VALUES (1, 'default', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch) VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day')"#,
+    )
+    .await
+    .unwrap();
+
+    conn.execute(
+        r#"INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0)"#,
+    )
+    .await
+    .unwrap();
+
+    let error = heeranjid_sqlx::generate_ranjid(&mut conn, 1)
+        .await
+        .unwrap_err();
+
+    // The large value should trigger hard clock rollback (>= 50ms equivalent in the µs scale)
+    match error {
+        heeranjid_sqlx::GenerateError::HardClockRollback { .. } => {
+            // Expected
+        }
+        _ => panic!("expected HardClockRollback, got {:?}", error),
+    }
+}
