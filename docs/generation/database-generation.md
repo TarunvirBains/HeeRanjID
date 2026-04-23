@@ -58,6 +58,11 @@ This enables:
 * Faster bulk insert operations
 * Better throughput under load
 
+Large batches may span multiple timestamp units. That is safe for uniqueness,
+but it can move the generator's logical state ahead of the database wall clock.
+See [future tick behavior](../design/future-tick-behavior.md) for the
+tradeoffs and possible improvements.
+
 ---
 
 ## Integration with application code
@@ -112,6 +117,10 @@ This is particularly useful in distributed systems with multiple writers.
 * Introduces dependency on database availability
 * May increase load on the database under high throughput
 * Requires database-specific setup
+* Hot nodes serialize behind their generator state row; use batching and
+  multiple registered node IDs for high-throughput workloads
+* Very large batches can create logical future drift; see
+  [future tick behavior](../design/future-tick-behavior.md)
 
 ---
 
