@@ -8,12 +8,14 @@
 mod convert;
 mod error;
 mod heer;
+mod heer_desc;
 #[cfg(feature = "postgres")]
 pub mod postgres_codec;
 #[cfg(feature = "postgres")]
 pub mod postgres_schema;
 mod precision;
 mod ranj;
+mod ranj_desc;
 mod serde_helpers;
 #[cfg(feature = "sqlx")]
 mod sqlx_codec;
