@@ -76,13 +76,23 @@ jobs:
       - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
 
-      - name: cargo test (integration)
-        run: cargo test -p heeranjid-sqlx --test postgres
+      - name: cargo test (heeranjid-sqlx integration)
+        run: cargo test -p heeranjid-sqlx -- --test-threads=1
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 
-      - name: cargo test (concurrency)
-        run: cargo test -p heeranjid-sqlx --test concurrency
+      - name: cargo test (heeranjid postgres features)
+        run: cargo test -p heeranjid --features postgres --features sqlx --tests -- --test-threads=1
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      - name: cargo run example (migrate_asc_to_desc)
+        run: cargo run -p heeranjid --features sqlx --features postgres --example migrate_asc_to_desc
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+
+      - name: cargo run example (migrate_asc_to_desc_with_fk)
+        run: cargo run -p heeranjid --features sqlx --features postgres --example migrate_asc_to_desc_with_fk
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 
