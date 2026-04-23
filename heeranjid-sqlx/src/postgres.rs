@@ -2,6 +2,20 @@ use heeranjid::Error;
 use sqlx::Executor;
 use sqlx::FromRow;
 
+fn map_sql_error(err: sqlx::Error) -> crate::GenerateError {
+    if let Some(db_err) = err.as_database_error() {
+        let code = db_err.code();
+        let message = db_err.message().to_string();
+        match code.as_deref() {
+            Some("50021") => return crate::GenerateError::LogicalDrift { message },
+            Some("50020") => return crate::GenerateError::ClockRollback { message },
+            Some("50022") => return crate::GenerateError::HardClockRollback { message },
+            _ => {}
+        }
+    }
+    crate::GenerateError::Database(err)
+}
+
 pub const SCHEMA_SQL: &str = include_str!("../sql/schema.sql");
 pub const SESSION_SQL: &str = include_str!("../sql/functions/session.sql");
 pub const GENERATE_HEERID_SQL: &str = include_str!("../sql/functions/generate_heerid.sql");
@@ -124,7 +138,8 @@ pub async fn generate_heerid(
     let raw: i64 = sqlx::query_scalar("SELECT generate_id($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
-        .await?;
+        .await
+        .map_err(map_sql_error)?;
     heeranjid::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId)
 }
 
@@ -135,7 +150,8 @@ pub async fn generate_ranjid(
     let uuid: uuid::Uuid = sqlx::query_scalar("SELECT generate_ranjid($1)")
         .bind(i32::from(node_id))
         .fetch_one(executor)
-        .await?;
+        .await
+        .map_err(map_sql_error)?;
     heeranjid::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId)
 }
 
@@ -148,7 +164,8 @@ pub async fn generate_heerids(
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
-        .await?;
+        .await
+        .map_err(map_sql_error)?;
     rows.into_iter()
         .map(|raw| heeranjid::HeerId::from_i64(raw).map_err(crate::GenerateError::InvalidHeerId))
         .collect()
@@ -174,7 +191,8 @@ pub async fn generate_ranjids(
         .bind(i32::from(node_id))
         .bind(count)
         .fetch_all(executor)
-        .await?;
+        .await
+        .map_err(map_sql_error)?;
     rows.into_iter()
         .map(|uuid| heeranjid::RanjId::from_uuid(uuid).map_err(crate::GenerateError::InvalidRanjId))
         .collect()

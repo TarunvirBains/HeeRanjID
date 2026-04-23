@@ -6,6 +6,12 @@ pub enum GenerateError {
     InvalidHeerId(#[source] heeranjid::Error),
     #[error("database returned invalid RanjId: {0}")]
     InvalidRanjId(#[source] heeranjid::Error),
+    #[error("logical future drift (batch-induced): {message}")]
+    LogicalDrift { message: String },
+    #[error("clock rollback: {message}")]
+    ClockRollback { message: String },
+    #[error("hard clock rollback: {message}")]
+    HardClockRollback { message: String },
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
 }
