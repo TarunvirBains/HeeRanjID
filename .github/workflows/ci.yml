@@ -338,6 +338,20 @@ jobs:
         env:
           MSSQL_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=mssql,1433;UID=sa;PWD=HeeRanjID_Test1;TrustServerCertificate=yes"
 
+      - name: Run MSSQL desc integration tests (v0.3.1)
+        run: pytest bindings/python/django/tests/test_mssql_desc_integration.py -v
+        env:
+          MSSQL_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=mssql,1433;UID=sa;PWD=HeeRanjID_Test1;TrustServerCertificate=yes"
+
+      - name: Run cross-vendor mask equivalence tests (v0.3.1)
+        run: pytest bindings/python/django/tests/test_cross_vendor_desc_equivalence.py -v
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
+          MSSQL_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=mssql,1433;UID=sa;PWD=HeeRanjID_Test1;TrustServerCertificate=yes"
+
+      - name: Run Django desc field unit tests (v0.3.1)
+        run: pytest bindings/python/django/tests/test_heeranjid_desc_fields.py bindings/python/django/tests/test_direction_flip_operation.py -v
+
   python-windows:
     name: Python tests (Windows)
     needs: rust-windows
