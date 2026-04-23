@@ -145,9 +145,144 @@ impl RanjId {
     }
 }
 
+#[pyclass(frozen, eq, ord, hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HeerIdDesc {
+    inner: heeranjid::HeerIdDesc,
+}
+
+#[pymethods]
+impl HeerIdDesc {
+    #[new]
+    fn py_new(value: i64) -> PyResult<Self> {
+        let inner = heeranjid::HeerIdDesc::from_i64(value)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        let inner: heeranjid::HeerIdDesc = s.parse().map_err(|e: heeranjid::Error| {
+            pyo3::exceptions::PyValueError::new_err(e.to_string())
+        })?;
+        Ok(Self { inner })
+    }
+
+    #[staticmethod]
+    fn from_parts(timestamp_ms: u64, node_id: u16, sequence: u16) -> PyResult<Self> {
+        let inner = heeranjid::HeerIdDesc::new(timestamp_ms, node_id, sequence)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    fn as_int(&self) -> i64 {
+        self.inner.as_i64()
+    }
+
+    #[getter]
+    fn timestamp_ms(&self) -> u64 {
+        self.inner.timestamp_ms()
+    }
+
+    #[getter]
+    fn node_id(&self) -> u16 {
+        self.inner.node_id()
+    }
+
+    #[getter]
+    fn sequence(&self) -> u16 {
+        self.inner.sequence()
+    }
+
+    fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("HeerIdDesc({})", self.inner.as_i64())
+    }
+}
+
+#[pyclass(frozen, eq, ord, hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RanjIdDesc {
+    inner: heeranjid::RanjIdDesc,
+}
+
+#[pymethods]
+impl RanjIdDesc {
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        let inner: heeranjid::RanjIdDesc = s.parse().map_err(|e: heeranjid::Error| {
+            pyo3::exceptions::PyValueError::new_err(e.to_string())
+        })?;
+        Ok(Self { inner })
+    }
+
+    #[staticmethod]
+    fn from_parts(
+        timestamp: u128,
+        precision: &str,
+        node_id: u16,
+        sequence: u16,
+    ) -> PyResult<Self> {
+        let prec = match precision {
+            "microseconds" | "us" => heeranjid::RanjPrecision::Microseconds,
+            "nanoseconds" | "ns" => heeranjid::RanjPrecision::Nanoseconds,
+            "picoseconds" | "ps" => heeranjid::RanjPrecision::Picoseconds,
+            "femtoseconds" | "fs" => heeranjid::RanjPrecision::Femtoseconds,
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "unknown precision {other:?}; expected one of: microseconds/us, nanoseconds/ns, picoseconds/ps, femtoseconds/fs"
+                )));
+            }
+        };
+        let inner = heeranjid::RanjIdDesc::new(timestamp, prec, node_id, sequence)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    fn to_uuid<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let uuid_mod = py.import("uuid")?;
+        let uuid_cls = uuid_mod.getattr("UUID")?;
+        let s = self.inner.as_uuid().to_string();
+        uuid_cls.call1((s,))
+    }
+
+    #[getter]
+    fn timestamp(&self) -> u128 {
+        self.inner.timestamp()
+    }
+
+    #[getter]
+    fn precision(&self) -> String {
+        self.inner.precision().label().to_string()
+    }
+
+    #[getter]
+    fn node_id(&self) -> u16 {
+        self.inner.node_id()
+    }
+
+    #[getter]
+    fn sequence(&self) -> u16 {
+        self.inner.sequence()
+    }
+
+    fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("RanjIdDesc({})", self.inner.as_uuid())
+    }
+}
+
 #[pymodule]
 fn _heeranjid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HeerId>()?;
     m.add_class::<RanjId>()?;
+    m.add_class::<HeerIdDesc>()?;
+    m.add_class::<RanjIdDesc>()?;
     Ok(())
 }
