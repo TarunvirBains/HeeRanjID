@@ -1,9 +1,24 @@
 //! Core HeeRanjID types.
 //!
-//! [`HeerId`] is the compact 64-bit Snowflake-style identifier: the default
-//! starting format, stored as `bigint`.
-//! [`RanjId`] is the UUIDv8-compatible 128-bit upgrade format: higher node and
-//! sequence capacity, sub-millisecond precision, stored as `uuid`.
+//! HeeRanjID is designed to let a project start on a single Postgres node with
+//! a compact 8-byte integer primary key, and migrate to distributed writers
+//! later without rewriting a single ID or schema. [`HeerId`] — a 64-bit
+//! time-ordered integer whose layout already carries a `node_id` field —
+//! is the primary type you reach for on day one. Going from one writer to
+//! many later is a config change (allocate more `node_id` values, bind each
+//! service's session); existing IDs stay valid.
+//!
+//! [`RanjId`] is the natural extension when `HeerId`'s capacity isn't enough
+//! (more than 511 nodes, more than 8,191 IDs per node per millisecond, or
+//! sub-millisecond timestamp precision). It's a UUIDv8-compatible 128-bit
+//! identifier stored as `uuid`, and conversion from `HeerId` is lossless.
+//!
+//! [`HeerIdDesc`] and [`RanjIdDesc`] are reverse-chronologically-sorted
+//! siblings: their raw-bit ordering matches a `DESC` scan, so newest-first
+//! `ORDER BY id` is served directly by the primary key index without a
+//! secondary descending index or a reverse scan. See the `asc-to-desc`
+//! migration playbook at `docs/migrations/asc-to-desc.md` for the workflow
+//! that flips an existing column under live writes.
 
 mod convert;
 mod error;
