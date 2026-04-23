@@ -43,7 +43,23 @@ In short: **BIGSERIAL paints you into a corner, UUIDv7 charges you 16 bytes fore
 - **Non-Postgres / non-MSSQL stack** — the database-side generators and migration tooling are half the value. MSSQL is planned for v0.3.1; other engines are not on the roadmap.
 - **You can't coordinate node_id allocation at provisioning time** — fully ephemeral / autoscaled workers with no stable identity don't fit the `heer_nodes` model. (A single node_id for a single-writer deployment is the easy case; this caveat only bites at the scale-out edge.)
 
-> **Note on URL-opaque IDs.** If your external API needs opaque, enumeration-resistant identifiers, you don't have to give up time-ordered internal IDs. Keep `HeerId` / `RanjId` as your canonical primary key and wrap it with a deterministic encoding at the edge — HMAC-with-secret, authenticated encryption (`pgp_sym_encrypt` from `pgcrypto` or a client-side AEAD), or a reversible encoding like `sqids`. The Stripe-style `cus_XXXXX` pattern and Firebase's document IDs are both built this way. You get the internal sort/index/generation properties of HeeRanjID and externally-opaque identifiers at the same time.
+> **Note on URL-opaque IDs.** If your external API needs opaque, enumeration-resistant identifiers, you don't have to give up time-ordered internal IDs. Keep `HeerId` / `RanjId` as your canonical primary key and wrap it with a deterministic reversible encoding at the edge. Stripe's `cus_XXXXX` pattern and Firebase's document IDs are both built this way — canonical time-ordered PK internally, deterministic reversible encoding externally.
+>
+> The mature version of this pattern splits the work by threat model, with two different algorithms in the default menu:
+>
+> | | **Sqids — default (≈95% case)** | **FPE / FF3-1 — opt-in (≈5% case)** |
+> |---|---|---|
+> | Output | Compact token (`veh_7kJ9mQ3xN2p`) | Same length as input |
+> | Deterministic | Yes | Yes |
+> | Crypto-grade | **No — obfuscation** | **Yes — NIST SP 800-38G** |
+> | Speed | ~500 ns / op | ~2–5 μs / op |
+> | Use case | Hide creation order, defeat casual enumeration, routing hints | High-value IDs where an attacker collecting many ciphertexts must still learn nothing (payments, regulated identifiers) |
+>
+> The 95/5 split is the honest shape: most apps need obfuscation, not encryption. Sqids is cheap and readable. FPE is the standards-grade escape hatch when opacity is a compliance-grade requirement rather than a UX nicety — accepting the tradeoffs (slower, FF3-1 has known cryptanalytic results against small domains, NIST SP 800-38G is under active revision).
+>
+> **Don't reach for AES-GCM at this layer.** Its fresh-IV-per-message design makes ciphertexts non-deterministic, which breaks stable routing keys — the same `HeerId` would produce different display tokens every call. AES-GCM is the right primitive for at-rest column encryption (PII, secrets); deterministic encodings are the right primitive for display IDs.
+>
+> You get the internal sort / index / generation properties of HeeRanjID and externally-opaque identifiers at the same time. HeeRanjID itself doesn't ship this encoding layer — it's a presentation-layer concern that belongs in whatever framework or service composes HeeRanjID into your app. See [sqids-rust](https://crates.io/crates/sqids) for the default case; FPE is typically implemented via the `fpe` crate or a hand-wired AES-CBC-MAC construction.
 
 ### Caveats worth reading before you adopt
 
