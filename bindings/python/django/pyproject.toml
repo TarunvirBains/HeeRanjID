@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "heeranjid-django"
-version = "0.1.3"
+version = "0.3.1"
 description = "Django integration for HeeRanjID distributed ID generation"
 readme = "README.md"
 requires-python = ">=3.10"
