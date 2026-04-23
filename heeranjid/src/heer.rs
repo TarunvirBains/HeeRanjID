@@ -144,11 +144,14 @@ impl TryFrom<i64> for HeerId {
 mod tests {
     use super::*;
 
+    // Compile-time proof that the mask preserves bit 63 = 0, which the
+    // HeerIdDesc type-level invariant depends on (§4.1).
+    const _: () = assert!(HEER_FLIP_MASK >= 0);
+
     #[test]
     fn heer_flip_mask_matches_spec_derivation() {
         let derived: i64 = (((1i64 << 41) - 1) << 22) | ((1i64 << 13) - 1);
         assert_eq!(derived, HEER_FLIP_MASK);
         assert_eq!(HEER_FLIP_MASK, 9_223_372_036_850_589_695);
-        assert!(HEER_FLIP_MASK >= 0, "top bit must be zero");
     }
 }
