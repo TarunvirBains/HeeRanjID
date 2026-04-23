@@ -439,9 +439,7 @@ class HeeRanjIdDirectionFlip(Operation):
         if is_mssql:
             cursor.execute(f"ALTER TABLE {table} ADD {dst_col} {col_type} NULL")
         else:
-            cursor.execute(
-                f"ALTER TABLE {table} ADD COLUMN {dst_col} {col_type}"
-            )
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {dst_col} {col_type}")
 
         # 2. Install the autofill trigger.
         self._install_autofill_trigger(cursor, is_mssql, table, src_col, dst_col, kind)
@@ -462,13 +460,9 @@ class HeeRanjIdDirectionFlip(Operation):
 
         # 4. Tighten NOT NULL.
         if is_mssql:
-            cursor.execute(
-                f"ALTER TABLE {table} ALTER COLUMN {dst_col} {col_type} NOT NULL"
-            )
+            cursor.execute(f"ALTER TABLE {table} ALTER COLUMN {dst_col} {col_type} NOT NULL")
         else:
-            cursor.execute(
-                f"ALTER TABLE {table} ALTER COLUMN {dst_col} SET NOT NULL"
-            )
+            cursor.execute(f"ALTER TABLE {table} ALTER COLUMN {dst_col} SET NOT NULL")
 
         # 5. Cutover: swap PK from src → dst column, then drop src.
         #    FK handling follows HeeRanjIdConversion's pattern.
@@ -479,9 +473,7 @@ class HeeRanjIdDirectionFlip(Operation):
         #    column pair. Safe to drop.
         self._drop_autofill_trigger(cursor, is_mssql, table)
 
-    def _install_autofill_trigger(
-        self, cursor, is_mssql, table, src_col, dst_col, kind
-    ):
+    def _install_autofill_trigger(self, cursor, is_mssql, table, src_col, dst_col, kind):
         if is_mssql:
             from heeranjid import mssql_schema
 
@@ -529,8 +521,7 @@ class HeeRanjIdDirectionFlip(Operation):
         trig_name = f"zzz_{table}_autofill_desc"
         if is_mssql:
             cursor.execute(
-                f"IF OBJECT_ID(N'{trig_name}', N'TR') IS NOT NULL "
-                f"DROP TRIGGER {trig_name}"
+                f"IF OBJECT_ID(N'{trig_name}', N'TR') IS NOT NULL DROP TRIGGER {trig_name}"
             )
         else:
             cursor.execute(f"DROP TRIGGER IF EXISTS {trig_name} ON {table}")
@@ -562,22 +553,16 @@ class HeeRanjIdDirectionFlip(Operation):
                 """
             )
             for (pk_name,) in cursor.fetchall():
-                cursor.execute(
-                    f"ALTER TABLE {table} DROP CONSTRAINT {pk_name} CASCADE"
-                )
+                cursor.execute(f"ALTER TABLE {table} DROP CONSTRAINT {pk_name} CASCADE")
 
         # 2. Drop the old src column.
         cursor.execute(f"ALTER TABLE {table} DROP COLUMN {src_col}")
 
         # 3. Rename dst → src (so model code referencing `.id` still works).
         if is_mssql:
-            cursor.execute(
-                f"EXEC sp_rename '{table}.{dst_col}', '{src_col}', 'COLUMN'"
-            )
+            cursor.execute(f"EXEC sp_rename '{table}.{dst_col}', '{src_col}', 'COLUMN'")
         else:
-            cursor.execute(
-                f"ALTER TABLE {table} RENAME COLUMN {dst_col} TO {src_col}"
-            )
+            cursor.execute(f"ALTER TABLE {table} RENAME COLUMN {dst_col} TO {src_col}")
 
         # 4. Recreate the PK.
         cursor.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({src_col})")
