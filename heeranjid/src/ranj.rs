@@ -15,6 +15,12 @@ pub const RANJ_UUID_VARIANT: u8 = 0b10;
 
 const RANJ_TIMESTAMP_MASK: u128 = (1u128 << RANJ_TIMESTAMP_BITS) - 1;
 
+/// RanjId flip mask — XOR target for converting between asc and desc forms.
+/// Flips ts_high(48) + ts_mid(12) + ts_low(29) + sequence(16) = 105 bits.
+/// Preserves version(4) + variant(2) + precision(2) + node(15) = 23 bits.
+/// See spec §6.2 for the nibble-level derivation.
+pub(crate) const RANJ_FLIP_MASK: u128 = 0xFFFF_FFFF_FFFF_0FFF_0FFF_FFFF_8000_FFFF;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RanjIdParts {
     pub timestamp: u128,
@@ -87,6 +93,16 @@ impl RanjId {
         Ok(Self(uuid))
     }
 
+    /// Wrap a raw uuid without validating version/variant bits.
+    ///
+    /// Used only by `reverse_order::ranj` after an XOR with `RANJ_FLIP_MASK`,
+    /// which preserves the version (4 bits) and variant (2 bits) nibbles
+    /// unchanged. Not exposed outside the crate because normal callers must
+    /// go through `from_uuid`.
+    pub(crate) fn from_uuid_raw(u: uuid::Uuid) -> Self {
+        Self(u)
+    }
+
     pub fn as_uuid(self) -> Uuid {
         self.0
     }
@@ -154,5 +170,36 @@ impl TryFrom<Uuid> for RanjId {
 
     fn try_from(uuid: Uuid) -> Result<Self, Self::Error> {
         Self::from_uuid(uuid)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ranj_flip_mask_preserves_version_variant_precision_node() {
+        let id = RanjId::new(
+            1_234_567_890_123,
+            crate::precision::RanjPrecision::Microseconds,
+            500,
+            4096,
+        )
+        .unwrap();
+        let raw = id.as_uuid().as_u128();
+        let flipped = raw ^ RANJ_FLIP_MASK;
+
+        assert_eq!((flipped >> 76) & 0xF, RANJ_UUID_VERSION as u128);
+        assert_eq!((flipped >> 62) & 0x3, RANJ_UUID_VARIANT as u128);
+        assert_eq!(
+            (flipped >> 60) & 0x3,
+            (raw >> 60) & 0x3,
+            "precision preserved"
+        );
+        assert_eq!(
+            (flipped >> 16) & ((1u128 << 15) - 1),
+            (raw >> 16) & ((1u128 << 15) - 1),
+            "node preserved"
+        );
     }
 }
