@@ -78,3 +78,15 @@ Not all RanjId values can be converted back to HeerId. Conversion fails if:
 * more than 8,192 RanjIds share the same (timestamp_ms, node_id) pair after truncating to milliseconds
 
 See [conversion rules](./conversion.md) for details.
+
+---
+
+## Descending variant
+
+`RanjIdDesc` is the reverse-chronologically-sorted sibling of `RanjId`. Use it when the natural read pattern for a UUID-stored table is "newest first" and you want `ORDER BY id DESC` to become a plain `ORDER BY id` that a B-tree index can serve without a reverse scan. Because the flip mask preserves the `version` (8) and `variant` (RFC 4122) bits, a `RanjIdDesc` stringified is still a valid UUIDv8 and lives in existing `uuid` columns alongside existing tooling.
+
+`RanjIdDesc` is a separate type, not a mode flag: a column is asc or desc at schema time and never mixed. Conversion between the two directions is a pure XOR against a flip mask that preserves version, variant, precision, and node — so values round-trip losslessly.
+
+**Precision-uniformity sort caveat.** The RanjId flip mask preserves the 2 precision bits (they sit between variant and `ts_low`), so those bits participate in raw-bit ordering. `Vec<RanjIdDesc>::sort()` therefore matches reverse-chronological order **only when all values share the same precision**. Mixed-precision values do not sort chronologically by raw bits. This is identical to the existing `RanjId` semantics and is the expected case under a single `RANJID_PRECISION` setting; it is called out here so callers do not assume otherwise.
+
+See the bit-layout reference for the exact mask and nibble-field table: [`docs/reference/bit-layout.md`](../reference/bit-layout.md#descending-flip-mask-variant-1). The design spec (local-only, gitignored) lives at `docs/superpowers/specs/2026-04-22-descending-sort-ids-design.md`. For converting an existing asc column to desc under live writes, follow the playbook at [`docs/migrations/asc-to-desc.md`](../migrations/asc-to-desc.md).

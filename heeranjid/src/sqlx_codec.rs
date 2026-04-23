@@ -24,7 +24,7 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-use crate::{HeerId, RanjId};
+use crate::{HeerId, HeerIdDesc, RanjId, RanjIdDesc};
 
 // ---------------------------------------------------------------------------
 // HeerId — BIGINT
@@ -75,6 +75,58 @@ impl<'r> Decode<'r, Postgres> for RanjId {
 }
 
 impl Encode<'_, Postgres> for RanjId {
+    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        <Uuid as Encode<Postgres>>::encode_by_ref(&self.as_uuid(), buf)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HeerIdDesc — BIGINT (stored bits = desc form)
+// ---------------------------------------------------------------------------
+
+impl sqlx::Type<Postgres> for HeerIdDesc {
+    fn type_info() -> PgTypeInfo {
+        <i64 as sqlx::Type<Postgres>>::type_info()
+    }
+    fn compatible(ty: &PgTypeInfo) -> bool {
+        <i64 as sqlx::Type<Postgres>>::compatible(ty)
+    }
+}
+
+impl<'r> Decode<'r, Postgres> for HeerIdDesc {
+    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+        let raw = <i64 as Decode<Postgres>>::decode(value)?;
+        HeerIdDesc::from_i64(raw).map_err(|e| Box::new(e) as BoxDynError)
+    }
+}
+
+impl Encode<'_, Postgres> for HeerIdDesc {
+    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        <i64 as Encode<Postgres>>::encode_by_ref(&self.as_i64(), buf)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RanjIdDesc — UUID (stored bits = desc form)
+// ---------------------------------------------------------------------------
+
+impl sqlx::Type<Postgres> for RanjIdDesc {
+    fn type_info() -> PgTypeInfo {
+        <Uuid as sqlx::Type<Postgres>>::type_info()
+    }
+    fn compatible(ty: &PgTypeInfo) -> bool {
+        <Uuid as sqlx::Type<Postgres>>::compatible(ty)
+    }
+}
+
+impl<'r> Decode<'r, Postgres> for RanjIdDesc {
+    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+        let u = <Uuid as Decode<Postgres>>::decode(value)?;
+        RanjIdDesc::from_uuid(u).map_err(|e| Box::new(e) as BoxDynError)
+    }
+}
+
+impl Encode<'_, Postgres> for RanjIdDesc {
     fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
         <Uuid as Encode<Postgres>>::encode_by_ref(&self.as_uuid(), buf)
     }

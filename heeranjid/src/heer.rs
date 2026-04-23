@@ -12,6 +12,11 @@ const HEER_TIMESTAMP_MASK: u64 = (1u64 << HEER_TIMESTAMP_BITS) - 1;
 const HEER_NODE_ID_MASK: u64 = (1u64 << HEER_NODE_ID_BITS) - 1;
 const HEER_SEQUENCE_MASK: u64 = (1u64 << HEER_SEQUENCE_BITS) - 1;
 
+/// HeerId flip mask — XOR target for converting between asc and desc forms.
+/// All 41 timestamp bits + all 13 sequence bits set; node bits and bit 63 zero.
+/// = `(((1i64 << 41) - 1) << 22) | ((1i64 << 13) - 1)` = `0x7FFF_FFFF_FFC0_1FFF`.
+pub(crate) const HEER_FLIP_MASK: i64 = 0x7FFF_FFFF_FFC0_1FFF;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeerIdParts {
     pub timestamp_ms: u64,
@@ -19,6 +24,7 @@ pub struct HeerIdParts {
     pub sequence: u16,
 }
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct HeerId(
     #[serde(
@@ -66,6 +72,16 @@ impl HeerId {
             return Err(Error::NegativeHeerId);
         }
         Ok(Self(raw))
+    }
+
+    /// Wrap a raw i64 without checking the non-negative invariant.
+    ///
+    /// Used only by `reverse_order::heer` after an XOR with `HEER_FLIP_MASK`
+    /// (bit 63 = 0), which provably preserves the bit-63 = 0 invariant that
+    /// `from_i64` enforces. Not exposed outside the crate because normal
+    /// callers must go through `from_i64`.
+    pub(crate) fn from_i64_raw(raw: i64) -> Self {
+        Self(raw)
     }
 
     pub fn as_i64(self) -> i64 {
@@ -122,5 +138,21 @@ impl TryFrom<i64> for HeerId {
 
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         Self::from_i64(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Compile-time proof that the mask preserves bit 63 = 0, which the
+    // HeerIdDesc type-level invariant depends on (§4.1).
+    const _: () = assert!(HEER_FLIP_MASK >= 0);
+
+    #[test]
+    fn heer_flip_mask_matches_spec_derivation() {
+        let derived: i64 = (((1i64 << 41) - 1) << 22) | ((1i64 << 13) - 1);
+        assert_eq!(derived, HEER_FLIP_MASK);
+        assert_eq!(HEER_FLIP_MASK, 9_223_372_036_850_589_695);
     }
 }

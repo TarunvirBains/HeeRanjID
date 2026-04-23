@@ -110,6 +110,25 @@ This provides monotonic ordering per node and time-based ordering across the sys
 
 ---
 
+## Descending (flip-mask) variant
+
+`HeerIdDesc` is the reverse-chronologically-sorted sibling of `HeerId`. It is produced by XOR-ing a `HeerId`'s stored bits against a constant flip mask that covers the timestamp and sequence fields and leaves the node field and bit 63 untouched:
+
+```text
+HEER_FLIP_MASK = (((1 << 41) - 1) << 22) | ((1 << 13) - 1)
+               = 0x7FFFFFFFFFC00000 | 0x0000000000001FFF
+               = 0x7FFFFFFFFFC01FFF
+               = 9223372036850589695   (decimal, i64)
+```
+
+Properties:
+
+- Bit 63 of the mask is **zero**. XORing any value whose bit 63 is zero against this mask yields another value with bit 63 zero, so `HeerIdDesc` values always round-trip cleanly through Postgres signed `BIGINT` and Rust `Ord` on `i64` agrees with Postgres signed comparison bit-for-bit.
+- XOR is symmetric: `heerid_to_desc(heerid_to_asc(x)) = x` for every `x`.
+- The 9-bit node field is preserved, not flipped, so a descending column still exposes the generating node directly in the stored bits.
+
+---
+
 # RanjId (128-bit)
 
 RanjId is a 128-bit, UUID-compatible identifier that can encode HeerId information while remaining usable as a standard UUID.
@@ -202,10 +221,48 @@ If any of these exceed HeerId limits, conversion fails.
 
 ---
 
+## Descending (flip-mask) variant
+
+`RanjIdDesc` is the reverse-chronologically-sorted sibling of `RanjId`. Bit positions are numbered from MSB (127) to LSB (0) below:
+
+| Bits       | Width | Field                           | Flipped? |
+|------------|-------|---------------------------------|----------|
+| `127..80`  | 48    | `ts_high`                       | **Yes**  |
+| `79..76`   | 4     | `version` (must be `0b1000`)    | No       |
+| `75..64`   | 12    | `ts_mid`                        | **Yes**  |
+| `63..62`   | 2     | `variant` (must be `0b10`)      | No       |
+| `61..60`   | 2     | `precision`                     | No       |
+| `59..31`   | 29    | `ts_low`                        | **Yes**  |
+| `30..16`   | 15    | `node`                          | No       |
+| `15..0`    | 16    | `sequence`                      | **Yes**  |
+
+Flipped bits sum to `48 + 12 + 29 + 16 = 105` (`89` timestamp + `16` sequence). Preserved bits sum to `4 + 2 + 2 + 15 = 23`.
+
+**Exact flip mask (128-bit):**
+
+```text
+RANJ_FLIP_MASK = 0xFFFFFFFFFFFF0FFF0FFFFFFF8000FFFF
+```
+
+Broken into nibble groups aligned to field boundaries (MSB on the left, LSB on the right):
+
+```text
+ts_high(48)          ver(4)  ts_mid(12)  var+prec(4)  ts_low(29)             node(15)        seq(16)
+FFFFFFFFFFFF         0       FFF         0            FFFFFFF8                000             FFFF
+```
+
+The byte at bit position `31..24` is `F8` because bit 31 (top bit of `ts_low`) is flipped while bits 30..28 (top of `node`) are preserved, giving `1000` binary = `8` hex for that nibble. The byte at `23..16` is `00` because those bits are entirely within the preserved `node` field.
+
+**UUIDv8 conformance preserved.** Because the `version` (4 bits) and `variant` (2 bits) fields are not flipped, a `RanjIdDesc` when stringified is still a valid UUIDv8 — any UUID-aware tool accepts it. The fact that the encoded timestamp is reverse-chronologically ordered is invisible to generic UUID tooling, which is what lets `RanjIdDesc` live in existing `uuid` columns.
+
+---
+
 ## Summary
 
 HeerId provides a compact, time-ordered 64-bit identifier optimized for storage and indexing.
 
 RanjId provides a UUID-compatible 128-bit representation for interoperability.
+
+The `HeerIdDesc` / `RanjIdDesc` siblings sort reverse-chronologically by raw bits while preserving the node field and (for RanjId) UUIDv8 compatibility.
 
 This document defines the canonical encoding used across all HeeRanjID implementations.

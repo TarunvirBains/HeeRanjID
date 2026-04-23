@@ -24,6 +24,8 @@ HeeRanjID provides a Snowflake-style system that works consistently across langu
 - migrate to `RanjId` when you need more headroom — up to 32,767 nodes, 65,535 IDs per node per timestamp unit, sub-millisecond precision, and UUID-compatible storage
 - the migration is lossless: `HeerId` converts to `RanjId` without data loss, and the UUID column type is compatible with existing tooling
 
+For tables whose natural read pattern is "newest first" (audit logs, activity feeds, event streams), HeeRanjID also ships `HeerIdDesc` and `RanjIdDesc` — reverse-chronologically-sorted siblings whose raw-bit ordering matches a `DESC` scan, so `ORDER BY id` on a descending column is served directly by a B-tree index without a reverse scan. Conversion between asc and desc is a lossless XOR against a flip mask that preserves the node field (and, for RanjId, UUIDv8 version/variant). See [`docs/migrations/asc-to-desc.md`](./docs/migrations/asc-to-desc.md) for the playbook that converts an existing column under live writes.
+
 ## Repository Layout
 
 - [`heeranjid/`](./heeranjid): core Rust types and conversions

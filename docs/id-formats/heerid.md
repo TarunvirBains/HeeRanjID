@@ -139,3 +139,13 @@ HeerId can be generated in two ways:
 HeerId supports up to 511 nodes and 8,191 IDs per node per millisecond. When a system grows beyond these limits — or requires sub-millisecond precision — it can migrate to RanjId. The conversion is lossless: every HeerId maps to exactly one RanjId.
 
 See [conversion rules](./conversion.md) for details.
+
+---
+
+## Descending variant
+
+`HeerIdDesc` is the reverse-chronologically-sorted sibling of `HeerId`. Use it when the natural read pattern for a table is "newest first" and you want `ORDER BY id DESC` to become a plain `ORDER BY id` that a B-tree index can serve without a reverse scan — for example, on audit logs, activity feeds, or event streams where the most recent rows dominate reads.
+
+`HeerIdDesc` is a separate type, not a mode flag: a column is asc or desc at schema time and never mixed. Conversion between the two directions is a pure XOR against a flip mask that preserves the node field and bit 63, so values round-trip losslessly and Rust `Ord` on `HeerIdDesc` agrees bit-for-bit with Postgres `BIGINT` signed comparison. `Vec<HeerIdDesc>::sort()` therefore produces reverse-chronological order that matches `SELECT ... ORDER BY id` from a desc column.
+
+See the bit-layout reference for the exact mask: [`docs/reference/bit-layout.md`](../reference/bit-layout.md#descending-flip-mask-variant). The design spec (local-only, gitignored) lives at `docs/superpowers/specs/2026-04-22-descending-sort-ids-design.md`. For converting an existing asc column to desc under live writes, follow the playbook at [`docs/migrations/asc-to-desc.md`](../migrations/asc-to-desc.md).

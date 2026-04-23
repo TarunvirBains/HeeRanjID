@@ -8,12 +8,15 @@
 mod convert;
 mod error;
 mod heer;
+mod heer_desc;
 #[cfg(feature = "postgres")]
 pub mod postgres_codec;
 #[cfg(feature = "postgres")]
 pub mod postgres_schema;
 mod precision;
 mod ranj;
+mod ranj_desc;
+pub mod reverse_order;
 mod serde_helpers;
 #[cfg(feature = "sqlx")]
 mod sqlx_codec;
@@ -21,11 +24,13 @@ mod sqlx_codec;
 pub use convert::{ConflictKind, ConversionConflict, ConversionError};
 pub use error::Error;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
+pub use heer_desc::HeerIdDesc;
 pub use precision::{RanjPrecision, generation_precision};
 pub use ranj::{
     RANJ_NODE_ID_BITS, RANJ_PRECISION_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId,
     RanjIdParts,
 };
+pub use ranj_desc::RanjIdDesc;
 
 #[cfg(test)]
 mod tests {
