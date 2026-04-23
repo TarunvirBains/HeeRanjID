@@ -285,3 +285,147 @@ async fn generate_id_after_seed() {
         .await
         .expect("drop test schema");
 }
+
+// ---------------------------------------------------------------------------
+// Per-table autofill trigger (Task 11)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn autofill_trigger_populates_desc_column_on_insert_and_update() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    // Create an isolated schema for testing.
+    let schema_name = "test_heeranjid_autofill_trigger";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+
+    // Pin search_path so all DDL and the trigger body resolve here.
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    // Install schema + all desc support (flip fns are what the trigger calls).
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+    heeranjid::postgres_schema::install_all_desc_support(&client)
+        .await
+        .expect("install_all_desc_support");
+
+    // Fixture table: plain int64 pk + a sibling desc column.
+    client
+        .batch_execute("CREATE TABLE trig_test (id bigint PRIMARY KEY, id_desc bigint)")
+        .await
+        .expect("create trig_test");
+
+    // Install the per-table trigger (single pair, Heer kind).
+    heeranjid::postgres_schema::install_autofill_trigger_for_table(
+        &client,
+        "trig_test",
+        &[heeranjid::postgres_schema::ColumnPair {
+            src: "id",
+            dst: "id_desc",
+        }],
+        heeranjid::postgres_schema::IdKind::Heer,
+    )
+    .await
+    .expect("install_autofill_trigger_for_table");
+
+    // INSERT without populating id_desc — trigger must fill it.
+    client
+        .execute("INSERT INTO trig_test (id) VALUES ($1)", &[&1000_i64])
+        .await
+        .expect("insert row");
+
+    let expected: i64 = client
+        .query_one("SELECT heerid_to_desc($1::bigint)", &[&1000_i64])
+        .await
+        .expect("expected id_desc for 1000")
+        .get(0);
+    let got: i64 = client
+        .query_one("SELECT id_desc FROM trig_test WHERE id = $1", &[&1000_i64])
+        .await
+        .expect("read id_desc after insert")
+        .get(0);
+    assert_eq!(
+        got, expected,
+        "INSERT trigger should populate id_desc via heerid_to_desc(id)"
+    );
+
+    // UPDATE the source — trigger must recompute id_desc.
+    client
+        .execute(
+            "UPDATE trig_test SET id = $1 WHERE id = $2",
+            &[&2000_i64, &1000_i64],
+        )
+        .await
+        .expect("update row");
+
+    let expected2: i64 = client
+        .query_one("SELECT heerid_to_desc($1::bigint)", &[&2000_i64])
+        .await
+        .expect("expected id_desc for 2000")
+        .get(0);
+    let got2: i64 = client
+        .query_one("SELECT id_desc FROM trig_test WHERE id = $1", &[&2000_i64])
+        .await
+        .expect("read id_desc after update")
+        .get(0);
+    assert_eq!(
+        got2, expected2,
+        "UPDATE trigger should recompute id_desc when source changes"
+    );
+
+    // Drop the trigger and confirm it's gone.
+    heeranjid::postgres_schema::drop_autofill_trigger_for_table(&client, "trig_test")
+        .await
+        .expect("drop_autofill_trigger_for_table");
+
+    let remaining: i64 = client
+        .query_one(
+            "SELECT count(*) FROM pg_trigger \
+             WHERE tgname = 'zzz_trig_test_autofill_desc' AND NOT tgisinternal",
+            &[],
+        )
+        .await
+        .expect("check trigger removal")
+        .get(0);
+    assert_eq!(remaining, 0, "trigger should be gone after drop helper");
+
+    // After drop, an UPDATE to id must NOT touch id_desc.
+    client
+        .execute(
+            "UPDATE trig_test SET id = $1 WHERE id = $2",
+            &[&3000_i64, &2000_i64],
+        )
+        .await
+        .expect("update row post-drop");
+    let stale: i64 = client
+        .query_one("SELECT id_desc FROM trig_test WHERE id = $1", &[&3000_i64])
+        .await
+        .expect("read id_desc after post-drop update")
+        .get(0);
+    assert_eq!(
+        stale, expected2,
+        "after drop, id_desc must not be recomputed by a trigger"
+    );
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+}

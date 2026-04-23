@@ -16,6 +16,54 @@
 
 use tokio_postgres::GenericClient;
 
+/// Error returned by the per-table autofill trigger helpers (Task 11 of
+/// the v0.3.0 descending-sort rollout).
+///
+/// The Task-10 install helpers (`install_flip_functions`,
+/// `install_desc_generators`, `install_migration_support`,
+/// `install_all_desc_support`) deliberately stay on
+/// `tokio_postgres::Error` — they don't do any client-side validation.
+/// The trigger helpers, by contrast, *must* reject malformed identifiers
+/// before interpolating them into SQL, which doesn't fit cleanly into
+/// the `tokio_postgres::Error` shape. Hence this local enum.
+#[derive(Debug)]
+pub enum SchemaError {
+    /// Underlying Postgres client error.
+    TokioPostgres(tokio_postgres::Error),
+    /// Caller passed a table/column name that failed `validate_ident`:
+    /// empty, longer than 63 chars, or contains non-[A-Za-z0-9_] bytes
+    /// (including the SQL-injection shapes `;`, `"`, `'`, whitespace,
+    /// `--`). The offending value is carried for diagnostics only —
+    /// callers should not echo it to untrusted clients.
+    InvalidIdentifier(String),
+}
+
+impl std::fmt::Display for SchemaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SchemaError::TokioPostgres(e) => write!(f, "tokio-postgres error: {e}"),
+            SchemaError::InvalidIdentifier(s) => {
+                write!(f, "invalid Postgres identifier: {s:?}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SchemaError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            SchemaError::TokioPostgres(e) => Some(e),
+            SchemaError::InvalidIdentifier(_) => None,
+        }
+    }
+}
+
+impl From<tokio_postgres::Error> for SchemaError {
+    fn from(e: tokio_postgres::Error) -> Self {
+        SchemaError::TokioPostgres(e)
+    }
+}
+
 /// Core `heer` schema DDL — tables, domains, and base types.
 pub const SCHEMA_SQL: &str = include_str!("../sql/schema.sql");
 
@@ -122,4 +170,237 @@ where
     install_desc_generators(client).await?;
     install_migration_support(client).await?;
     Ok(())
+}
+
+// --- per-table autofill trigger helpers for v0.3.0 ---
+
+/// A source/destination column pair for a per-table autofill trigger.
+///
+/// `src` is the existing ascending-sort column, `dst` is the descending
+/// sibling that the trigger keeps in sync. Multiple pairs may be passed
+/// in one call to [`install_autofill_trigger_for_table`]; each gets an
+/// independent `IF` branch in both the INSERT and UPDATE arms.
+pub struct ColumnPair<'a> {
+    /// Source (ascending) column name.
+    pub src: &'a str,
+    /// Destination (descending) column name.
+    pub dst: &'a str,
+}
+
+/// Which flip family the generated trigger should call:
+/// `heerid_to_desc` (64-bit) or `ranjid_to_desc` (128-bit / bytea).
+pub enum IdKind {
+    /// HeerId (64-bit ascending -> descending via `heerid_to_desc`).
+    Heer,
+    /// RanjId (128-bit ascending -> descending via `ranjid_to_desc`).
+    Ranj,
+}
+
+impl IdKind {
+    /// Name of the Postgres function that flips an ascending id to its
+    /// descending sibling.
+    fn flip_fn(&self) -> &'static str {
+        match self {
+            IdKind::Heer => "heerid_to_desc",
+            IdKind::Ranj => "ranjid_to_desc",
+        }
+    }
+}
+
+/// Validates that `s` is a safe, unquoted Postgres identifier.
+///
+/// Accepts `^[A-Za-z_][A-Za-z0-9_]*$` up to 63 bytes (Postgres
+/// `NAMEDATALEN - 1`). Rejects everything else — including strings
+/// containing `;`, `"`, `'`, whitespace, or `--`, which would open an
+/// SQL-injection channel when interpolated into the trigger DDL that
+/// [`install_autofill_trigger_for_table`] generates.
+///
+/// This is a belt-and-braces check: callers should never pass untrusted
+/// input here, but if they do, we fail closed rather than exec arbitrary
+/// DDL.
+fn validate_ident(s: &str) -> Result<(), SchemaError> {
+    // 63 = Postgres NAMEDATALEN - 1.
+    if s.is_empty() || s.len() > 63 {
+        return Err(SchemaError::InvalidIdentifier(s.to_string()));
+    }
+    let mut chars = s.chars();
+    let first = chars.next().expect("non-empty checked above");
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return Err(SchemaError::InvalidIdentifier(s.to_string()));
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(SchemaError::InvalidIdentifier(s.to_string()));
+    }
+    Ok(())
+}
+
+/// Installs a `BEFORE INSERT OR UPDATE` trigger that keeps descending
+/// sibling columns in sync with their ascending sources.
+///
+/// The generated function is named `zzz_<table>_autofill_desc`. The
+/// `zzz_` prefix is load-bearing — Postgres fires `BEFORE` triggers in
+/// alphabetical order, and forcing this one to run last means any
+/// user-defined trigger that wants to adjust `NEW.<src>` gets to do so
+/// before the descending sibling is computed from it (spec §5.1).
+///
+/// For each `ColumnPair { src, dst }`:
+/// * On `INSERT`: if `NEW.<dst> IS NULL`, fill it from `flip(NEW.<src>)`.
+/// * On `UPDATE`: if `NEW.<src>` changed, recompute `NEW.<dst>`; else if
+///   `NEW.<dst> IS NULL`, fill it from `flip(NEW.<src>)`.
+///
+/// Idempotent — re-running replaces both the function and the trigger.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::InvalidIdentifier`] if `table` or any
+/// `ColumnPair` field fails [`validate_ident`];
+/// [`SchemaError::TokioPostgres`] if the DDL `batch_execute` fails.
+///
+/// # Panics
+///
+/// Panics if `pairs` is empty — at least one pair is required.
+pub async fn install_autofill_trigger_for_table<C>(
+    client: &C,
+    table: &str,
+    pairs: &[ColumnPair<'_>],
+    kind: IdKind,
+) -> Result<(), SchemaError>
+where
+    C: GenericClient + ?Sized,
+{
+    assert!(!pairs.is_empty(), "at least one ColumnPair required");
+    validate_ident(table)?;
+    for p in pairs {
+        validate_ident(p.src)?;
+        validate_ident(p.dst)?;
+    }
+
+    let flip_fn = kind.flip_fn();
+    let fn_name = format!("zzz_{}_autofill_desc", table);
+    let trig_name = &fn_name;
+
+    let mut insert_body = String::new();
+    let mut update_body = String::new();
+    for p in pairs {
+        use std::fmt::Write as _;
+        writeln!(
+            insert_body,
+            "        IF NEW.{dst} IS NULL THEN NEW.{dst} := {flip}(NEW.{src}); END IF;",
+            dst = p.dst,
+            flip = flip_fn,
+            src = p.src,
+        )
+        .expect("write! to String cannot fail");
+        write!(
+            update_body,
+            "        IF NEW.{src} IS DISTINCT FROM OLD.{src} THEN\n\
+             \x20           NEW.{dst} := {flip}(NEW.{src});\n\
+             \x20       ELSIF NEW.{dst} IS NULL THEN\n\
+             \x20           NEW.{dst} := {flip}(NEW.{src});\n\
+             \x20       END IF;\n",
+            src = p.src,
+            dst = p.dst,
+            flip = flip_fn,
+        )
+        .expect("write! to String cannot fail");
+    }
+
+    let sql = format!(
+        r#"
+CREATE OR REPLACE FUNCTION {fn_name}() RETURNS trigger AS $body$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+{insert_body}    ELSIF TG_OP = 'UPDATE' THEN
+{update_body}    END IF;
+    RETURN NEW;
+END;
+$body$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS {trig_name} ON {table};
+CREATE TRIGGER {trig_name}
+    BEFORE INSERT OR UPDATE ON {table}
+    FOR EACH ROW EXECUTE FUNCTION {fn_name}();
+"#,
+        fn_name = fn_name,
+        trig_name = trig_name,
+        insert_body = insert_body,
+        update_body = update_body,
+        table = table,
+    );
+
+    client.batch_execute(&sql).await?;
+    Ok(())
+}
+
+/// Removes the autofill trigger and underlying function installed by
+/// [`install_autofill_trigger_for_table`] for `table`.
+///
+/// Safe to call when the trigger is not present (uses `IF EXISTS`).
+///
+/// # Errors
+///
+/// Returns [`SchemaError::InvalidIdentifier`] if `table` fails
+/// [`validate_ident`]; [`SchemaError::TokioPostgres`] on underlying DDL
+/// failure.
+pub async fn drop_autofill_trigger_for_table<C>(client: &C, table: &str) -> Result<(), SchemaError>
+where
+    C: GenericClient + ?Sized,
+{
+    validate_ident(table)?;
+    let fn_name = format!("zzz_{}_autofill_desc", table);
+    let sql = format!(
+        "DROP TRIGGER IF EXISTS {name} ON {tbl};\n\
+         DROP FUNCTION IF EXISTS {name}() CASCADE;\n",
+        name = fn_name,
+        tbl = table,
+    );
+    client.batch_execute(&sql).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_ident_rejects_sql_injection_attempts() {
+        // Classic statement-terminator injection.
+        assert!(validate_ident("tbl; DROP TABLE users").is_err());
+        // Quote-based injection.
+        assert!(validate_ident("\"quoted\"").is_err());
+        assert!(validate_ident("it's").is_err());
+        // Comment-based injection.
+        assert!(validate_ident("tbl--").is_err());
+        // Whitespace.
+        assert!(validate_ident("two words").is_err());
+        assert!(validate_ident("tab\tname").is_err());
+        assert!(validate_ident("nl\nname").is_err());
+        // Empty.
+        assert!(validate_ident("").is_err());
+        // Over 63 chars.
+        assert!(validate_ident(&"x".repeat(64)).is_err());
+        // Starts with a digit.
+        assert!(validate_ident("1tbl").is_err());
+        // Stray punctuation that isn't ; " ' but would still be wrong.
+        assert!(validate_ident("tbl-name").is_err());
+        assert!(validate_ident("tbl.name").is_err());
+    }
+
+    #[test]
+    fn validate_ident_accepts_valid_identifiers() {
+        assert!(validate_ident("tbl").is_ok());
+        assert!(validate_ident("_internal_thing").is_ok());
+        assert!(validate_ident("events_v2").is_ok());
+        assert!(validate_ident("A").is_ok());
+        assert!(validate_ident("_").is_ok());
+        assert!(validate_ident("id_desc").is_ok());
+        // Exactly 63 chars is OK (NAMEDATALEN - 1).
+        assert!(validate_ident(&"a".repeat(63)).is_ok());
+    }
+
+    #[test]
+    fn id_kind_flip_fn_matches_sql_names() {
+        assert_eq!(IdKind::Heer.flip_fn(), "heerid_to_desc");
+        assert_eq!(IdKind::Ranj.flip_fn(), "ranjid_to_desc");
+    }
 }
