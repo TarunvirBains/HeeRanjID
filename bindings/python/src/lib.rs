@@ -221,12 +221,7 @@ impl RanjIdDesc {
     }
 
     #[staticmethod]
-    fn from_parts(
-        timestamp: u128,
-        precision: &str,
-        node_id: u16,
-        sequence: u16,
-    ) -> PyResult<Self> {
+    fn from_parts(timestamp: u128, precision: &str, node_id: u16, sequence: u16) -> PyResult<Self> {
         let prec = match precision {
             "microseconds" | "us" => heeranjid::RanjPrecision::Microseconds,
             "nanoseconds" | "ns" => heeranjid::RanjPrecision::Nanoseconds,
@@ -318,10 +313,7 @@ fn register_mssql_schema_submodule<'py>(
     parent: &Bound<'py, PyModule>,
 ) -> PyResult<()> {
     let m = PyModule::new(py, "mssql_schema")?;
-    m.add(
-        "DESC_FLIP_TSQL",
-        heeranjid::mssql_schema::DESC_FLIP_TSQL,
-    )?;
+    m.add("DESC_FLIP_TSQL", heeranjid::mssql_schema::DESC_FLIP_TSQL)?;
     m.add(
         "DESC_GENERATORS_TSQL",
         heeranjid::mssql_schema::DESC_GENERATORS_TSQL,
