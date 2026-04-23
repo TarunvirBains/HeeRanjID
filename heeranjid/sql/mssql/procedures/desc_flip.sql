@@ -11,10 +11,16 @@
 -- 0FFFFFFF8000FFFF preserves UUIDv8 version/variant nibbles and the
 -- node_id field. T-SQL has no native `^` on varbinary, so we XOR byte
 -- by byte via SUBSTRING + CAST AS tinyint + STUFF.
+--
+-- Note on WITH SCHEMABINDING: intentionally omitted. SCHEMABINDING
+-- enables scalar-UDF inlining on SQL Server 2019+ (a perf win) but
+-- also creates a strict dependency graph that blocks `CREATE OR ALTER`
+-- on a function referenced by another schema-bound function. That
+-- would wedge test harnesses and deploy pipelines that re-install the
+-- flip surface. Correctness is unaffected.
 
 CREATE OR ALTER FUNCTION dbo.heerid_flip_mask()
 RETURNS bigint
-WITH SCHEMABINDING
 AS
 BEGIN
     RETURN CAST(0x7FFFFFFFFFC01FFF AS bigint);
@@ -23,7 +29,6 @@ GO
 
 CREATE OR ALTER FUNCTION dbo.heerid_to_desc(@bits bigint)
 RETURNS bigint
-WITH SCHEMABINDING
 AS
 BEGIN
     RETURN @bits ^ CAST(0x7FFFFFFFFFC01FFF AS bigint);
@@ -32,7 +37,6 @@ GO
 
 CREATE OR ALTER FUNCTION dbo.heerid_to_asc(@bits bigint)
 RETURNS bigint
-WITH SCHEMABINDING
 AS
 BEGIN
     -- XOR is its own inverse.
@@ -42,7 +46,6 @@ GO
 
 CREATE OR ALTER FUNCTION dbo.ranjid_to_desc(@id BINARY(16))
 RETURNS BINARY(16)
-WITH SCHEMABINDING
 AS
 BEGIN
     DECLARE @mask BINARY(16) = 0xFFFFFFFFFFFF0FFF0FFFFFFF8000FFFF;
@@ -63,7 +66,6 @@ GO
 
 CREATE OR ALTER FUNCTION dbo.ranjid_to_asc(@id BINARY(16))
 RETURNS BINARY(16)
-WITH SCHEMABINDING
 AS
 BEGIN
     -- XOR is its own inverse; delegate to ranjid_to_desc.
