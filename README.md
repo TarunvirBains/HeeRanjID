@@ -44,19 +44,19 @@ Three common alternatives cover most projects: **database sequences** (BIGSERIAL
 | Upgrade path (8 → 16 bytes without rewrite) | No | N/A (already 16) | Yes — `HeerId ↔ RanjId` via `From` / `TryFrom` |
 | Cross-language bit-for-bit parity | Yes (it's just an int) | Mostly (tie-breaking varies by driver) | Yes — Rust + Python/Django + TS + .NET + C FFI |
 
-**When each is the right default:**
+**Strengths of each option:**
 
-- **BIGSERIAL** — single-writer Postgres apps with no multi-region or sharding plans. Simple, cheap, boring. The round-trip cost per INSERT only matters at high write rates.
-- **UUIDv7** — multi-writer, client-side generation, greenfield, no strong sort-order requirements. The RFC-standard choice.
-- **HeeRanjID** — any one of: (a) you want newest-first `ORDER BY id` cheap, (b) you want 8-byte IDs *now* with an escape hatch to 16 bytes later, (c) you need identical ID semantics across multiple language stacks sharing a DB, (d) you want server-side generators with clock-rollback guards.
+- **BIGSERIAL** — zero ceremony on day one. But: no client-side generation, no multi-writer path, and migrating to a distributed setup later means rewriting both IDs and every system that stores them. A lock-in decision dressed as simplicity.
+- **UUIDv7** — RFC-standard, well-supported, works the same way on one node or a hundred. 16 bytes forever, random sub-ms tie-breaking, reverse scan or secondary index for newest-first reads.
+- **HeeRanjID** — designed specifically for the single-node greenfield case with a **painless upgrade path to distributed later**. `HeerId` on one node behaves like a sequence — 8 bytes, time-ordered, server-side generated — but the format already carries a node field. Adding writers later means allocating more `node_id` values in the `heer_nodes` table and binding each service's session; existing IDs stay valid, no schema change, no ID-format change, no downtime. Plus: newest-first `ORDER BY id` from the PK index via `HeerIdDesc`, a further lossless upgrade path from `HeerId` to `RanjId` when 8 bytes stops being enough, and identical ID semantics across Rust / Python-Django / TypeScript / .NET / C FFI.
 
-**Don't reach for HeeRanjID if:**
+In short: **BIGSERIAL paints you into a corner, UUIDv7 charges you 16 bytes forever for options you may never exercise, HeeRanjID lets you start simple and grow without rewrites.**
 
-- You're greenfield and single-writer — BIGSERIAL is fine and requires zero ceremony.
-- You're greenfield and multi-writer with no strong sort requirement — UUIDv7 wins on inertia and ecosystem support.
-- You don't use PostgreSQL (MSSQL is planned for v0.3.1). The database-side generators are where half the value lives.
-- You want opaque IDs for URL safety or enumeration-resistance. HeeRanjID's IDs carry timing information; use `nanoid`, `cuid2`, or `sqids` instead.
-- Your nodes can't be assigned stable, coordinated node_ids at provisioning time (`heer_nodes` table is required).
+**Genuine reasons to pick something else:**
+
+- **Non-Postgres / non-MSSQL stack** — the database-side generators and migration tooling are half the value. MSSQL is planned for v0.3.1; other engines are not on the roadmap.
+- **You need opaque / URL-safe / enumeration-resistant IDs** — HeeRanjID IDs embed a timestamp and node. Use `nanoid`, `cuid2`, or `sqids` instead.
+- **You can't coordinate node_id allocation at provisioning time** — fully ephemeral / autoscaled workers with no stable identity don't fit the `heer_nodes` model. (A single node_id for a single-writer deployment is the easy case; this caveat only bites at the scale-out edge.)
 
 ### Caveats worth reading before you adopt
 
