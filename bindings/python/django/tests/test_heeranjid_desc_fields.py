@@ -30,8 +30,15 @@ from heeranjid_django.fields import (
 
 
 class _FakeConnection:
-    def __init__(self, vendor):
+    class _Ops:
+        @staticmethod
+        def quote_name(value):
+            return value
+
+    def __init__(self, vendor, uuid_type="uniqueidentifier"):
         self.vendor = vendor
+        self.ops = self._Ops()
+        self.data_types = {"UUIDField": uuid_type}
 
 
 class TestHeerIdDescField:
