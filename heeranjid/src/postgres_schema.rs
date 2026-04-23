@@ -45,6 +45,19 @@ pub const INSTALL_SQL: &str = concat!(
 /// Seed SQL — inserts the default node row (node_id = 1).
 pub const SEED_SQL: &str = include_str!("../sql/seed.sql");
 
+// --- flip/generator/backfill install helpers for v0.3.0 ---
+
+/// Flip primitives: `heerid_flip_mask`, `heerid_to_desc`/`heerid_to_asc`,
+/// `ranjid_to_desc`/`ranjid_to_asc`. (§5.1)
+pub const DESC_FLIP_SQL: &str = include_str!("../sql/functions/desc_flip.sql");
+
+/// Single-row generators + desc generators: `heerid_next`, `ranjid_next`,
+/// `heerid_next_desc`, `ranjid_next_desc`. (§5.1)
+pub const DESC_GENERATORS_SQL: &str = include_str!("../sql/functions/desc_generators.sql");
+
+/// Migration-support procedure: `heeranjid_bulk_backfill`. (§5.1)
+pub const BULK_BACKFILL_SQL: &str = include_str!("../sql/functions/bulk_backfill.sql");
+
 /// Install the HeeRanjID schema + functions on the target database.
 ///
 /// Runs [`INSTALL_SQL`] via `client.batch_execute`. Idempotent in the
@@ -68,4 +81,45 @@ where
     C: GenericClient + ?Sized,
 {
     client.batch_execute(SEED_SQL).await
+}
+
+// --- flip/generator/backfill install helpers for v0.3.0 ---
+
+/// Installs the asc↔desc flip functions. Idempotent.
+pub async fn install_flip_functions<C>(client: &C) -> Result<(), tokio_postgres::Error>
+where
+    C: GenericClient + ?Sized,
+{
+    client.batch_execute(DESC_FLIP_SQL).await
+}
+
+/// Installs `heerid_next` / `ranjid_next` single-row wrappers plus the
+/// `*_next_desc` generators. Requires the base `generate_ids` /
+/// `generate_ranj_ids` functions to already be present (v0.2.x schema).
+pub async fn install_desc_generators<C>(client: &C) -> Result<(), tokio_postgres::Error>
+where
+    C: GenericClient + ?Sized,
+{
+    client.batch_execute(DESC_GENERATORS_SQL).await
+}
+
+/// Installs the `heeranjid_bulk_backfill` procedure. Does not install
+/// per-table triggers — those go through `install_autofill_trigger_for_table`.
+pub async fn install_migration_support<C>(client: &C) -> Result<(), tokio_postgres::Error>
+where
+    C: GenericClient + ?Sized,
+{
+    client.batch_execute(BULK_BACKFILL_SQL).await
+}
+
+/// Convenience: runs [`install_flip_functions`], [`install_desc_generators`],
+/// and [`install_migration_support`] in order. Idempotent.
+pub async fn install_all_desc_support<C>(client: &C) -> Result<(), tokio_postgres::Error>
+where
+    C: GenericClient + ?Sized,
+{
+    install_flip_functions(client).await?;
+    install_desc_generators(client).await?;
+    install_migration_support(client).await?;
+    Ok(())
 }

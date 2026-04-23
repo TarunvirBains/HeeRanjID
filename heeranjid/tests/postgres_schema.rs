@@ -164,6 +164,71 @@ async fn seed_default_node_creates_row() {
 }
 
 // ---------------------------------------------------------------------------
+// Desc flip round-trip (install_all_desc_support)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn desc_flip_round_trips_inside_postgres() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    // Create an isolated schema for testing.
+    let schema_name = "test_heeranjid_desc_flip";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+
+    // Set search_path so subsequent DDL lands in our isolated schema.
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    // Install schema, seed, and all desc support.
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+    heeranjid::postgres_schema::install_all_desc_support(&client)
+        .await
+        .expect("install_all_desc_support");
+
+    // heerid_to_asc(heerid_to_desc(1234567)) must round-trip.
+    let row = client
+        .query_one("SELECT heerid_to_asc(heerid_to_desc(1234567::bigint))", &[])
+        .await
+        .expect("round-trip query");
+    let back: i64 = row.get(0);
+    assert_eq!(back, 1_234_567, "heerid_to_asc(heerid_to_desc(x)) == x");
+
+    // heerid_flip_mask() must equal the documented constant.
+    let row = client
+        .query_one("SELECT heerid_flip_mask()", &[])
+        .await
+        .expect("flip mask query");
+    let mask: i64 = row.get(0);
+    assert_eq!(
+        mask, 9_223_372_036_850_589_695,
+        "heerid_flip_mask() == documented constant"
+    );
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+}
+
+// ---------------------------------------------------------------------------
 // ID generation post-seed
 // ---------------------------------------------------------------------------
 
