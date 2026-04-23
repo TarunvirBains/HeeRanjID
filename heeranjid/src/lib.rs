@@ -16,6 +16,7 @@ pub mod postgres_schema;
 mod precision;
 mod ranj;
 mod ranj_desc;
+pub mod reverse_order;
 mod serde_helpers;
 #[cfg(feature = "sqlx")]
 mod sqlx_codec;
