@@ -15,7 +15,6 @@ readme = "README.md"
 default = []
 sqlx = ["dep:sqlx"]
 postgres = ["dep:postgres-types", "dep:bytes", "dep:tokio-postgres"]
-mssql_schema = []
 
 [dependencies]
 serde.workspace = true

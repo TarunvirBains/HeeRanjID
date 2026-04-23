@@ -10,6 +10,6 @@ name = "_heeranjid"
 crate-type = ["cdylib"]
 
 [dependencies]
-heeranjid = { path = "../../heeranjid", default-features = false, features = ["mssql_schema"] }
+heeranjid = { path = "../../heeranjid", default-features = false }
 pyo3 = { version = "0.24", features = ["extension-module"] }
 uuid = "1"
