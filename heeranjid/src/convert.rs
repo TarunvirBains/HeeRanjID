@@ -137,6 +137,37 @@ impl RanjId {
         conflicts
     }
 
+    /// Batch-convert `RanjId` values to `HeerId`, squashing sequences as
+    /// needed to fit HeerId's narrower (13-bit) sequence field.
+    ///
+    /// # Sequence squashing
+    ///
+    /// `HeerId` has 13 sequence bits (max 8191) and millisecond timestamp
+    /// granularity. `RanjId` has 16 sequence bits (max 65535) and
+    /// configurable sub-millisecond precision. When this conversion is
+    /// applied to a slice, inputs are grouped by `(timestamp_ms, node_id)`
+    /// — where `timestamp_ms` is the `RanjId`'s timestamp scaled down to
+    /// milliseconds — and each group is sorted by its original bit
+    /// pattern. Sequences are then **reassigned from 0** within each
+    /// group, preserving *ordering* but **not** the original `sequence`
+    /// field values.
+    ///
+    /// A singleton group (common when you call this with a single-element
+    /// slice, or when timestamps don't collide at millisecond granularity)
+    /// will always receive `sequence = 0`. This is intentional and matches
+    /// the batch-wide guarantee; if you need the original `sequence` bits,
+    /// you cannot lossily downcast to `HeerId` — the field is simply
+    /// narrower.
+    ///
+    /// # Errors
+    ///
+    /// - [`ConversionError::NodeIdOverflow`] if any input's `node_id`
+    ///   exceeds `HeerId::MAX_NODE_ID` (511).
+    /// - [`ConversionError::TimestampOverflow`] if any input's scaled
+    ///   `timestamp_ms` exceeds `HeerId::MAX_TIMESTAMP_MS`.
+    /// - [`ConversionError::SequenceOverflow`] if any `(timestamp_ms,
+    ///   node_id)` group contains more than 8192 inputs — the group
+    ///   cannot fit in HeerId's sequence space.
     pub fn batch_to_heerids(ids: &[RanjId]) -> Result<Vec<(RanjId, HeerId)>, ConversionError> {
         let max_seq = HeerId::MAX_SEQUENCE as usize + 1;
 
@@ -200,6 +231,11 @@ impl RanjId {
 // desc-typed conversions below reuse them to avoid duplicating the scaling
 // and precision-coercion logic.
 
+/// Always lossless.
+///
+/// Scales `HeerId`'s millisecond timestamp to the current
+/// [`RanjPrecision`](crate::RanjPrecision) unit and zero-pads the extra
+/// sequence bits. `node_id` and `sequence` are preserved exactly.
 impl From<HeerId> for RanjId {
     fn from(hid: HeerId) -> Self {
         // `batch_to_ranjids` is infallible; a single-element call cannot fail.
@@ -211,6 +247,26 @@ impl From<HeerId> for RanjId {
     }
 }
 
+/// Single-value downcast from `RanjId` to `HeerId`.
+///
+/// **Sequence is not preserved.** This wraps
+/// [`RanjId::batch_to_heerids`] with a single-element slice, which
+/// always assigns the output `sequence = 0` because a singleton group
+/// contains only one entry. `timestamp_ms` (scaled down from the
+/// `RanjId`'s sub-millisecond timestamp) and `node_id` *are* preserved.
+///
+/// If you need `sequence` preserved verbatim you cannot downcast — the
+/// field is narrower on `HeerId` (13 bits vs 16). Use
+/// [`RanjId::batch_to_heerids`] directly if you need the full batch
+/// semantics (ordering within `(timestamp_ms, node_id)` groups
+/// preserved, sequences re-densified from 0).
+///
+/// # Errors
+///
+/// Returns [`ConversionError::NodeIdOverflow`] or
+/// [`ConversionError::TimestampOverflow`] if the value doesn't fit in
+/// `HeerId`'s narrower fields. `SequenceOverflow` is unreachable for a
+/// single-element conversion.
 impl TryFrom<RanjId> for HeerId {
     type Error = ConversionError;
     fn try_from(rid: RanjId) -> Result<Self, Self::Error> {
@@ -231,6 +287,11 @@ impl TryFrom<RanjId> for HeerId {
 // `TryFrom` direction (NodeIdOverflow, TimestampOverflow, SequenceOverflow);
 // see spec §4.5.
 
+/// Always lossless.
+///
+/// Mirrors `From<HeerId> for RanjId` through the asc types, with the
+/// flip-neutral-codec invariant preserved on both sides (one XOR in,
+/// one XOR out).
 impl From<crate::HeerIdDesc> for crate::RanjIdDesc {
     fn from(hd: crate::HeerIdDesc) -> Self {
         // Go logical → logical through the asc types to reuse the existing
@@ -249,6 +310,25 @@ impl From<crate::HeerIdDesc> for crate::RanjIdDesc {
     }
 }
 
+/// Single-value downcast from `RanjIdDesc` to `HeerIdDesc`.
+///
+/// **Sequence is not preserved** — this delegates to
+/// `TryFrom<RanjId> for HeerId`, which runs the singleton through
+/// [`RanjId::batch_to_heerids`] and always returns `sequence = 0`.
+/// `timestamp_ms` (scaled down from the `RanjIdDesc`'s sub-millisecond
+/// timestamp) and `node_id` *are* preserved.
+///
+/// If you need `sequence` preserved verbatim across the direction-type
+/// boundary, construct a `HeerIdDesc` explicitly:
+/// `HeerIdDesc::new(rd.timestamp() / factor, rd.node_id(), rd.sequence())`
+/// — but check that `rd.sequence() <= HeerId::MAX_SEQUENCE` first.
+///
+/// # Errors
+///
+/// Returns [`ConversionError::NodeIdOverflow`] or
+/// [`ConversionError::TimestampOverflow`] if the value doesn't fit in
+/// `HeerIdDesc`'s narrower fields. `SequenceOverflow` is unreachable
+/// for a single-element conversion.
 impl TryFrom<crate::RanjIdDesc> for crate::HeerIdDesc {
     type Error = ConversionError;
     fn try_from(rd: crate::RanjIdDesc) -> Result<Self, Self::Error> {
