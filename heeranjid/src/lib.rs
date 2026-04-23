@@ -28,6 +28,8 @@ pub mod mssql_schema;
 #[cfg(feature = "postgres")]
 pub mod postgres_codec;
 #[cfg(feature = "postgres")]
+pub mod postgres_generate;
+#[cfg(feature = "postgres")]
 pub mod postgres_schema;
 mod precision;
 mod ranj;
