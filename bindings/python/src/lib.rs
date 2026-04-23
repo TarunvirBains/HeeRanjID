@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
 
 #[pyclass(frozen, eq, ord, hash)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -278,11 +279,76 @@ impl RanjIdDesc {
     }
 }
 
+// --- mssql_schema submodule -------------------------------------------
+
+#[pyfunction]
+#[pyo3(signature = (table, pairs, kind))]
+fn mssql_install_autofill_trigger_for_table(
+    table: &str,
+    pairs: Vec<(String, String)>,
+    kind: &str,
+) -> PyResult<String> {
+    use heeranjid::mssql_schema as ms;
+    use heeranjid::schema_shared::{ColumnPair, IdKind};
+    let kind = match kind {
+        "heer" => IdKind::Heer,
+        "ranj" => IdKind::Ranj,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown kind: {other}; expected 'heer' or 'ranj'"
+            )));
+        }
+    };
+    let cp: Vec<ColumnPair<'_>> = pairs
+        .iter()
+        .map(|(s, d)| ColumnPair { src: s, dst: d })
+        .collect();
+    ms::install_autofill_trigger_for_table_mssql(table, &cp, kind)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn mssql_drop_autofill_trigger_for_table(table: &str) -> PyResult<String> {
+    heeranjid::mssql_schema::drop_autofill_trigger_for_table_mssql(table)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+fn register_mssql_schema_submodule<'py>(
+    py: Python<'py>,
+    parent: &Bound<'py, PyModule>,
+) -> PyResult<()> {
+    let m = PyModule::new(py, "mssql_schema")?;
+    m.add(
+        "DESC_FLIP_TSQL",
+        heeranjid::mssql_schema::DESC_FLIP_TSQL,
+    )?;
+    m.add(
+        "DESC_GENERATORS_TSQL",
+        heeranjid::mssql_schema::DESC_GENERATORS_TSQL,
+    )?;
+    m.add(
+        "BULK_BACKFILL_TSQL",
+        heeranjid::mssql_schema::BULK_BACKFILL_TSQL,
+    )?;
+    m.add(
+        "INSTALL_ALL_DESC_TSQL",
+        heeranjid::mssql_schema::INSTALL_ALL_DESC_TSQL,
+    )?;
+    m.add_function(wrap_pyfunction!(
+        mssql_install_autofill_trigger_for_table,
+        &m
+    )?)?;
+    m.add_function(wrap_pyfunction!(mssql_drop_autofill_trigger_for_table, &m)?)?;
+    parent.add_submodule(&m)?;
+    Ok(())
+}
+
 #[pymodule]
 fn _heeranjid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HeerId>()?;
     m.add_class::<RanjId>()?;
     m.add_class::<HeerIdDesc>()?;
     m.add_class::<RanjIdDesc>()?;
+    register_mssql_schema_submodule(m.py(), m)?;
     Ok(())
 }

@@ -1,5 +1,18 @@
 import uuid
 
+class mssql_schema:
+    DESC_FLIP_TSQL: str
+    DESC_GENERATORS_TSQL: str
+    BULK_BACKFILL_TSQL: str
+    INSTALL_ALL_DESC_TSQL: str
+
+    @staticmethod
+    def mssql_install_autofill_trigger_for_table(
+        table: str, pairs: list[tuple[str, str]], kind: str
+    ) -> str: ...
+    @staticmethod
+    def mssql_drop_autofill_trigger_for_table(table: str) -> str: ...
+
 class HeerId:
     def __init__(self, value: int) -> None: ...
     @staticmethod
