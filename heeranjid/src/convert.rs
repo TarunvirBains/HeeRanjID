@@ -545,4 +545,31 @@ mod desc_tests {
         assert_eq!(hd_back.node_id(), 42);
         assert_eq!(hd_back.sequence(), 0);
     }
+
+    #[test]
+    fn ranj_desc_try_into_heer_desc_reports_timestamp_overflow() {
+        // RanjId's 89-bit timestamp field holds values far beyond HeerId's
+        // 41-bit millisecond range. Build a RanjIdDesc whose logical
+        // timestamp, scaled down to ms, exceeds HeerId::MAX_TIMESTAMP_MS,
+        // and confirm the conversion surfaces the expected error variant.
+        let factor = crate::precision::generation_precision().from_millis_multiplier();
+        let ts_units = u128::from(HeerId::MAX_TIMESTAMP_MS + 1) * factor;
+        let rd = RanjIdDesc::new(ts_units, RanjPrecision::Microseconds, 1, 0).unwrap();
+        let err = HeerIdDesc::try_from(rd).unwrap_err();
+        assert!(
+            matches!(err, ConversionError::TimestampOverflow { .. }),
+            "expected TimestampOverflow, got {err:?}"
+        );
+    }
+
+    // Spec §4.5 lists three failure modes for `TryFrom<RanjIdDesc> for
+    // HeerIdDesc`: NodeIdOverflow, TimestampOverflow, SequenceOverflow.
+    // The first two are reachable with a single input (see the two tests
+    // above). SequenceOverflow is only reachable when a *batch* of inputs
+    // shares (timestamp_ms, node_id) and the group size exceeds HeerId's
+    // 13-bit sequence field — a single-element batch is always ≤ 1 and
+    // therefore cannot trigger it. Callers that need the batch path and
+    // its sequence-squashing semantics use `RanjId::batch_to_heerids`
+    // directly (covered by `batch_to_heerids_fails_on_sequence_overflow`
+    // in the asc test module).
 }
