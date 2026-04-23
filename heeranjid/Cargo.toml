@@ -30,3 +30,11 @@ serde_json.workspace = true
 sqlx.workspace = true
 tokio-postgres.workspace = true
 tokio.workspace = true
+
+[[example]]
+name = "migrate_asc_to_desc"
+required-features = ["sqlx", "postgres"]
+
+[[example]]
+name = "migrate_asc_to_desc_with_fk"
+required-features = ["sqlx", "postgres"]
