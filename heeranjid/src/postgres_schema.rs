@@ -253,7 +253,8 @@ fn validate_ident(s: &str) -> Result<(), SchemaError> {
 /// # Errors
 ///
 /// Returns [`SchemaError::InvalidIdentifier`] if `table` or any
-/// `ColumnPair` field fails [`validate_ident`];
+/// `ColumnPair` field fails identifier validation (strict
+/// `^[A-Za-z_][A-Za-z0-9_]*$`, max 63 chars);
 /// [`SchemaError::TokioPostgres`] if the DDL `batch_execute` fails.
 ///
 /// # Panics
@@ -340,8 +341,8 @@ CREATE TRIGGER {trig_name}
 /// # Errors
 ///
 /// Returns [`SchemaError::InvalidIdentifier`] if `table` fails
-/// [`validate_ident`]; [`SchemaError::TokioPostgres`] on underlying DDL
-/// failure.
+/// identifier validation (strict `^[A-Za-z_][A-Za-z0-9_]*$`, max 63
+/// chars); [`SchemaError::TokioPostgres`] on underlying DDL failure.
 pub async fn drop_autofill_trigger_for_table<C>(client: &C, table: &str) -> Result<(), SchemaError>
 where
     C: GenericClient + ?Sized,

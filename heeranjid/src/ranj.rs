@@ -29,6 +29,7 @@ pub struct RanjIdParts {
     pub sequence: u16,
 }
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RanjId(
     #[serde(

@@ -92,20 +92,34 @@ async fn parent_child_fk_migration_end_to_end() {
     .await
     .unwrap();
 
+    // Pin a sqlx connection for the fixture inserts so that the
+    // `set_heer_node_id(1)` session setting persists across the
+    // `heerid_next()` calls in the INSERT statements — without pinning,
+    // the pool may hand a fresh connection to each query and
+    // `current_heer_node_id()` inside `heerid_next()` would raise.
+    let mut fixture_conn = pool.acquire().await.expect("acquire fixture conn");
+    sqlx::query("SELECT set_heer_node_id(1)")
+        .execute(&mut *fixture_conn)
+        .await
+        .expect("set_heer_node_id on fixture conn");
+
     // 100 parent rows.
-    pool.execute("INSERT INTO parents SELECT heerid_next() FROM generate_series(1, 100)")
+    sqlx::query("INSERT INTO parents SELECT heerid_next() FROM generate_series(1, 100)")
+        .execute(&mut *fixture_conn)
         .await
         .unwrap();
 
     // 10 children per parent = 1000 children total. Pick parent IDs
     // deterministically from the seeded parents.
-    pool.execute(
+    sqlx::query(
         "INSERT INTO children (id, parent_id)
          SELECT heerid_next(), p.id
          FROM parents p, generate_series(1, 10) g",
     )
+    .execute(&mut *fixture_conn)
     .await
     .unwrap();
+    drop(fixture_conn);
 
     let parent_count: i64 = sqlx::query_scalar("SELECT count(*) FROM parents")
         .fetch_one(&pool)

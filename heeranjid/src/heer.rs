@@ -24,6 +24,7 @@ pub struct HeerIdParts {
     pub sequence: u16,
 }
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct HeerId(
     #[serde(
