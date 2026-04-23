@@ -2,29 +2,15 @@
 
 > Named after Heer and Ranjha, the central figures of a classic South Asian folk tale.
 
-HeerRanjId is a cross-language Snowflake-style ID system built around two related formats:
+**HeeRanjID lets you start a project on a single Postgres node with a simple 8-byte integer PK, then migrate to distributed writers later without rewriting a single ID or a single line of application code.**
 
-- `HeerId`: a compact, time-ordered 64-bit integer identifier
-- `RanjId`: a UUIDv8-compatible 128-bit identifier with sub-millisecond precision and higher node/sequence capacity
+The core type, `HeerId`, is designed specifically for this: it's an 8-byte time-ordered integer whose bit layout *already* carries a `node_id` field even when you only have one writer. Going from one node to many later is a config change (allocate more `node_id` values in `heer_nodes`, bind each new writer's session) — no schema change, no ID-format change, no downtime, no application migration. Existing IDs stay valid forever.
 
-The repository centers on a Rust implementation, with PostgreSQL helpers and
-language bindings for Python, Django, TypeScript, .NET, and C FFI consumers.
+`RanjId` is the natural extension when `HeerId`'s fields stop being enough (more than 511 nodes, more than 8,191 IDs per node per millisecond, or sub-millisecond timestamp precision). Same design philosophy, bigger fields, UUIDv8-compatible 16-byte storage. The `HeerId → RanjId` path is lossless and the reverse is well-defined, so you can grow through both tiers without a forklift migration.
 
-## Why HeeRanjID
+For tables whose natural read pattern is "newest first" (audit logs, activity feeds, event streams), HeeRanjID also ships `HeerIdDesc` and `RanjIdDesc` — reverse-chronologically-sorted siblings whose raw-bit ordering matches a `DESC` scan, so `ORDER BY id` on a descending column is served directly by the PK index with no secondary index and no reverse scan. Conversion between asc and desc is a lossless XOR against a flip mask that preserves the node field (and, for RanjId, UUIDv8 version/variant). See [`docs/migrations/asc-to-desc.md`](./docs/migrations/asc-to-desc.md) for the playbook that converts an existing column under live writes.
 
-Most teams end up choosing between:
-
-- integers that are compact but collide in distributed systems
-- UUIDs that are portable but random — they fragment indexes and carry no timing information
-- Snowflake-style IDs that solve ordering but are often tied to one stack or language
-
-HeeRanjID provides a Snowflake-style system that works consistently across languages and databases, with a clear upgrade path built in:
-
-- start with `HeerId` — compact bigint, time-ordered, up to 511 nodes and 8,191 IDs per node per millisecond
-- migrate to `RanjId` when you need more headroom — up to 32,767 nodes, 65,535 IDs per node per timestamp unit, sub-millisecond precision, and UUID-compatible storage
-- the migration is lossless: `HeerId` converts to `RanjId` without data loss, and the UUID column type is compatible with existing tooling
-
-For tables whose natural read pattern is "newest first" (audit logs, activity feeds, event streams), HeeRanjID also ships `HeerIdDesc` and `RanjIdDesc` — reverse-chronologically-sorted siblings whose raw-bit ordering matches a `DESC` scan, so `ORDER BY id` on a descending column is served directly by a B-tree index without a reverse scan. Conversion between asc and desc is a lossless XOR against a flip mask that preserves the node field (and, for RanjId, UUIDv8 version/variant). See [`docs/migrations/asc-to-desc.md`](./docs/migrations/asc-to-desc.md) for the playbook that converts an existing column under live writes.
+The repository centers on a Rust implementation, with PostgreSQL helpers and language bindings for Python, Django, TypeScript, .NET, and C FFI consumers — so the IDs behave identically in every service that shares the database.
 
 ## When to use HeeRanjID (and when not to)
 

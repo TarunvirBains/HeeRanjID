@@ -1,8 +1,12 @@
 # Overview
 
-HeeRanjID is a Snowflake-style ID system designed to work consistently across languages and databases.
+**HeeRanjID is designed to let a project start on a single Postgres node with a compact 8-byte integer PK, then migrate to distributed writers later without rewriting a single ID.**
 
-It provides time-ordered, compact identifiers with a built-in upgrade path: start with `HeerId` and migrate to `RanjId` when you outgrow its limits — without data loss or schema disruption.
+`HeerId` is the primary type: a 64-bit time-ordered integer whose bit layout already carries a `node_id` field on day one, even when there's only one writer. When you later need multiple writers, you allocate more `node_id` values in `heer_nodes` and bind each service's session — no schema change, no ID-format change, no application migration. Existing IDs remain valid forever.
+
+`RanjId` is the natural extension when `HeerId`'s capacity stops being enough: a 128-bit UUIDv8-compatible identifier with wider node and sequence fields plus sub-millisecond precision. Converting `HeerId → RanjId` is lossless, so you can grow through both tiers without rewriting data.
+
+Both formats ship with reverse-chronologically-sorted siblings — `HeerIdDesc` and `RanjIdDesc` — whose raw-bit ordering matches a `DESC` scan, so newest-first `ORDER BY id` is served directly by the PK index without a secondary index.
 
 ---
 
@@ -10,16 +14,16 @@ It provides time-ordered, compact identifiers with a built-in upgrade path: star
 
 Most systems today choose between a few common approaches for identifiers:
 
-* **Auto-increment integers** — efficient and compact, but not globally unique across nodes
-* **UUIDs** — globally unique and portable, but random — they fragment indexes and carry no timing information
-* **Snowflake-style IDs** — time-ordered and compact, but often tied to specific languages or infrastructure
+* **Auto-increment integers** — efficient and compact, but locked to a single writer. Adding more writers later is a forklift migration that touches every ID in the database.
+* **UUIDs** — globally unique and portable, but 16 bytes forever and random sub-ms tie-breaking that doesn't match any domain semantics.
+* **Snowflake-style IDs** — time-ordered and compact, but usually tied to one stack or language, and usually require distributed infrastructure on day one.
 
-HeeRanjID provides a Snowflake-style system that addresses these issues:
+HeeRanjID is a Snowflake-style system explicitly engineered for the single-node greenfield case, with a painless path to distributed:
 
-* Time-ordered IDs for efficient indexing and range queries
-* Distributed generation without central coordination
-* A consistent encoding across multiple languages and database backends
-* A built-in upgrade path from a compact integer format to a UUID-compatible format
+* Start with `HeerId` on one node — behaves like a time-ordered sequence
+* Scale out to multiple writers later by adding node entries — no ID or schema changes
+* Upgrade to `RanjId` when 8 bytes isn't enough — lossless conversion
+* Consistent encoding across Rust, Python/Django, TypeScript, .NET, and C FFI
 
 ---
 
