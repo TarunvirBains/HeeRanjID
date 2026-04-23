@@ -16,6 +16,10 @@
 
 use tokio_postgres::GenericClient;
 
+use crate::schema_shared::{self, SharedSchemaError};
+
+pub use crate::schema_shared::{ColumnPair, IdKind};
+
 /// Error returned by the per-table autofill trigger helpers (Task 11 of
 /// the v0.3.0 descending-sort rollout).
 ///
@@ -61,6 +65,14 @@ impl std::error::Error for SchemaError {
 impl From<tokio_postgres::Error> for SchemaError {
     fn from(e: tokio_postgres::Error) -> Self {
         SchemaError::TokioPostgres(e)
+    }
+}
+
+impl From<SharedSchemaError> for SchemaError {
+    fn from(e: SharedSchemaError) -> Self {
+        match e {
+            SharedSchemaError::InvalidIdentifier(s) => SchemaError::InvalidIdentifier(s),
+        }
     }
 }
 
@@ -173,65 +185,14 @@ where
 }
 
 // --- per-table autofill trigger helpers for v0.3.0 ---
+//
+// `ColumnPair` and `IdKind` are defined in `schema_shared` and
+// re-exported at the top of this module so the public API stays stable
+// from the pre-v0.3.1 layout. `validate_ident` is also in
+// `schema_shared`; this module delegates to it.
 
-/// A source/destination column pair for a per-table autofill trigger.
-///
-/// `src` is the existing ascending-sort column, `dst` is the descending
-/// sibling that the trigger keeps in sync. Multiple pairs may be passed
-/// in one call to [`install_autofill_trigger_for_table`]; each gets an
-/// independent `IF` branch in both the INSERT and UPDATE arms.
-pub struct ColumnPair<'a> {
-    /// Source (ascending) column name.
-    pub src: &'a str,
-    /// Destination (descending) column name.
-    pub dst: &'a str,
-}
-
-/// Which flip family the generated trigger should call:
-/// `heerid_to_desc` (64-bit) or `ranjid_to_desc` (128-bit / bytea).
-pub enum IdKind {
-    /// HeerId (64-bit ascending -> descending via `heerid_to_desc`).
-    Heer,
-    /// RanjId (128-bit ascending -> descending via `ranjid_to_desc`).
-    Ranj,
-}
-
-impl IdKind {
-    /// Name of the Postgres function that flips an ascending id to its
-    /// descending sibling.
-    fn flip_fn(&self) -> &'static str {
-        match self {
-            IdKind::Heer => "heerid_to_desc",
-            IdKind::Ranj => "ranjid_to_desc",
-        }
-    }
-}
-
-/// Validates that `s` is a safe, unquoted Postgres identifier.
-///
-/// Accepts `^[A-Za-z_][A-Za-z0-9_]*$` up to 63 bytes (Postgres
-/// `NAMEDATALEN - 1`). Rejects everything else — including strings
-/// containing `;`, `"`, `'`, whitespace, or `--`, which would open an
-/// SQL-injection channel when interpolated into the trigger DDL that
-/// [`install_autofill_trigger_for_table`] generates.
-///
-/// This is a belt-and-braces check: callers should never pass untrusted
-/// input here, but if they do, we fail closed rather than exec arbitrary
-/// DDL.
 fn validate_ident(s: &str) -> Result<(), SchemaError> {
-    // 63 = Postgres NAMEDATALEN - 1.
-    if s.is_empty() || s.len() > 63 {
-        return Err(SchemaError::InvalidIdentifier(s.to_string()));
-    }
-    let mut chars = s.chars();
-    let first = chars.next().expect("non-empty checked above");
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return Err(SchemaError::InvalidIdentifier(s.to_string()));
-    }
-    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
-        return Err(SchemaError::InvalidIdentifier(s.to_string()));
-    }
-    Ok(())
+    schema_shared::validate_ident(s).map_err(Into::into)
 }
 
 /// Installs a `BEFORE INSERT OR UPDATE` trigger that keeps descending
