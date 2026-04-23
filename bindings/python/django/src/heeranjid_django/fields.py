@@ -4,7 +4,7 @@ from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.expressions import DatabaseDefault, RawSQL
-from heeranjid import HeerId, RanjId
+from heeranjid import HeerId, HeerIdDesc, RanjId, RanjIdDesc
 
 
 def _normalize_pending_db_default(value):
@@ -201,3 +201,208 @@ class RanjIdField(models.UUIDField):
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
         return name, "heeranjid_django.fields.RanjIdField", args, kwargs
+
+
+class RanjIdDescFormField(forms.UUIDField):
+    """
+    Form field for RanjIdDesc values.
+
+    Accepts the same input as Django's UUIDField but returns a
+    RanjIdDesc instance instead of uuid.UUID, keeping the type
+    consistent whether the value came from a form or the database.
+    """
+
+    def to_python(self, value):
+        uuid_val = super().to_python(value)
+        if uuid_val is None:
+            return None
+        return RanjIdDesc.from_str(str(uuid_val))
+
+
+class HeerIdDescField(models.BigIntegerField):
+    """
+    Descending-sort sibling of HeerIdField. Stores 64-bit integers whose
+    raw-bit ordering matches reverse-chronological order, so
+    `ORDER BY id` on a desc column is served directly by the PK index.
+
+    Ships with v0.3.1 on both Postgres and MSSQL; pre_save dispatches on
+    connection.vendor to the right generator procedure.
+    """
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get("primary_key", False) and "db_default" not in kwargs:
+            kwargs["db_default"] = RawSQL("heerid_next_desc()", [])
+        super().__init__(*args, **kwargs)
+
+    def contribute_to_class(self, cls, name, **kwargs):
+        super().contribute_to_class(cls, name, **kwargs)
+
+        def check_manager(sender, **signal_kwargs):
+            manager = cls._default_manager
+            if manager is None or not getattr(manager, "_heeranjid_enabled", False):
+                raise ImproperlyConfigured(
+                    f"Model '{cls.__name__}' has a {self.__class__.__name__} but its "
+                    f"default manager does not support HeeRanjID bulk operations. "
+                    f"Use HeeRanjIdManager or add HeeRanjIdManagerMixin to your custom manager."
+                )
+
+        from django.db.models.signals import class_prepared
+
+        class_prepared.connect(check_manager, sender=cls, weak=False)
+
+    def pre_save(self, model_instance, add):
+        value = _normalize_pending_db_default(getattr(model_instance, self.attname, None))
+        if value is not None:
+            return value
+        if not add:
+            return value
+        # MANUAL mode: do not auto-generate; let the caller assign the PK.
+        if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
+            setattr(model_instance, self.attname, None)
+            return value
+
+        from django.db import connection
+
+        from heeranjid_django.managers import _get_node_id
+
+        node_id = _get_node_id()
+
+        cursor = connection.cursor()
+        if connection.vendor == "microsoft":
+            cursor.execute("EXEC heerid_next_desc @in_node_id = %s", [node_id])
+        else:
+            cursor.execute("SELECT heerid_next_desc(%s)", [node_id])
+        row = cursor.fetchone()
+        new_id = HeerIdDesc(int(row[0]))
+        setattr(model_instance, self.attname, new_id)
+        return new_id
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return None
+        return HeerIdDesc(int(value))
+
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        if isinstance(value, HeerIdDesc):
+            return value.as_int()
+        return int(value)
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if not prepared:
+            value = self.get_prep_value(value)
+        return value
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        return name, "heeranjid_django.fields.HeerIdDescField", args, kwargs
+
+
+class RanjIdDescField(models.UUIDField):
+    """
+    Descending-sort sibling of RanjIdField. Stores 128-bit UUIDv8 values
+    whose raw-bit ordering matches reverse-chronological order.
+
+    Ships with v0.3.1 on both Postgres (uuid column) and MSSQL
+    (BINARY(16) to avoid the uniqueidentifier mixed-endian byte-swap);
+    pre_save dispatches on connection.vendor to the right generator
+    procedure.
+    """
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get("primary_key", False) and "db_default" not in kwargs:
+            kwargs["db_default"] = RawSQL("ranjid_next_desc()", [])
+        super().__init__(*args, **kwargs)
+
+    def contribute_to_class(self, cls, name, **kwargs):
+        super().contribute_to_class(cls, name, **kwargs)
+
+        def check_manager(sender, **signal_kwargs):
+            manager = cls._default_manager
+            if manager is None or not getattr(manager, "_heeranjid_enabled", False):
+                raise ImproperlyConfigured(
+                    f"Model '{cls.__name__}' has a {self.__class__.__name__} but its "
+                    f"default manager does not support HeeRanjID bulk operations. "
+                    f"Use HeeRanjIdManager or add HeeRanjIdManagerMixin to your custom manager."
+                )
+
+        from django.db.models.signals import class_prepared
+
+        class_prepared.connect(check_manager, sender=cls, weak=False)
+
+    def db_type(self, connection):
+        # Preserve raw big-endian bytes on MSSQL to avoid uniqueidentifier's
+        # mixed-endian byte-swap, which would corrupt RanjIdDesc's timestamp bits.
+        if connection.vendor == "microsoft":
+            return "BINARY(16)"
+        return super().db_type(connection)  # native uuid on Postgres
+
+    def pre_save(self, model_instance, add):
+        value = _normalize_pending_db_default(getattr(model_instance, self.attname, None))
+        if value is not None:
+            return value
+        if not add:
+            return value
+        if getattr(model_instance.__class__, "_heeranjid_prefetch_manual", False):
+            setattr(model_instance, self.attname, None)
+            return value
+
+        from django.db import connection
+
+        from heeranjid_django.managers import _get_node_id
+
+        node_id = _get_node_id()
+
+        cursor = connection.cursor()
+        if connection.vendor == "microsoft":
+            cursor.execute("EXEC ranjid_next_desc @in_node_id = %s", [node_id])
+            row = cursor.fetchone()
+            raw = row[0]
+            new_id = RanjIdDesc.from_str(str(uuid_mod.UUID(bytes=bytes(raw))))
+        else:
+            cursor.execute("SELECT ranjid_next_desc(%s)", [node_id])
+            row = cursor.fetchone()
+            new_id = RanjIdDesc.from_str(str(row[0]))
+        setattr(model_instance, self.attname, new_id)
+        return new_id
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return None
+        if isinstance(value, (bytes, memoryview)):
+            value = uuid_mod.UUID(bytes=bytes(value))
+        if isinstance(value, uuid_mod.UUID):
+            return RanjIdDesc.from_str(str(value))
+        return RanjIdDesc.from_str(str(value))
+
+    def to_python(self, value):
+        if isinstance(value, RanjIdDesc):
+            return value
+        if value is None:
+            return None
+        uuid_val = super().to_python(value)
+        if uuid_val is None:
+            return None
+        return RanjIdDesc.from_str(str(uuid_val))
+
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        if isinstance(value, RanjIdDesc):
+            return value.to_uuid()
+        if isinstance(value, uuid_mod.UUID):
+            return value
+        return uuid_mod.UUID(str(value))
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if not prepared:
+            value = self.get_prep_value(value)
+        return value
+
+    def formfield(self, **kwargs):
+        return super().formfield(**{"form_class": RanjIdDescFormField, **kwargs})
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        return name, "heeranjid_django.fields.RanjIdDescField", args, kwargs

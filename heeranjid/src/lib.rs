@@ -24,6 +24,7 @@ mod convert;
 mod error;
 mod heer;
 mod heer_desc;
+pub mod mssql_schema;
 #[cfg(feature = "postgres")]
 pub mod postgres_codec;
 #[cfg(feature = "postgres")]
@@ -32,6 +33,7 @@ mod precision;
 mod ranj;
 mod ranj_desc;
 pub mod reverse_order;
+pub mod schema_shared;
 mod serde_helpers;
 #[cfg(feature = "sqlx")]
 mod sqlx_codec;
