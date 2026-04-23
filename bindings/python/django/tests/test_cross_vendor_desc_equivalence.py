@@ -10,8 +10,14 @@ bit patterns).
 
 Requires BOTH DATABASE_URL (Postgres) and MSSQL_URL. If either is
 missing, the module is skipped.
+
+This test only exercises the flip functions (pure stateless XOR), so
+the fixtures install just the flip primitive SQL — no heer_config,
+no node seeding, no generator procs.
 """
+
 import os
+import pathlib
 import uuid
 
 import pytest
@@ -21,25 +27,37 @@ MSSQL_URL = os.environ.get("MSSQL_URL")
 
 if not DATABASE_URL or not MSSQL_URL:
     pytest.skip(
-        "DATABASE_URL and MSSQL_URL both required for cross-vendor "
-        "equivalence tests",
+        "DATABASE_URL and MSSQL_URL both required for cross-vendor equivalence tests",
         allow_module_level=True,
     )
 
 psycopg2 = pytest.importorskip("psycopg2")
 pyodbc = pytest.importorskip("pyodbc")
 
+from heeranjid import mssql_schema
+
+# Repo-root relative path to the v0.3.0 Postgres desc flip SQL. It's
+# under heeranjid/sql/functions/; pytest runs from the repo root both
+# locally and in CI.
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+_PG_DESC_FLIP_SQL = (_REPO_ROOT / "heeranjid" / "sql" / "functions" / "desc_flip.sql").read_text()
+
 
 @pytest.fixture(scope="module")
 def pg_conn():
+    """Install v0.3.0 desc flip functions on Postgres."""
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute(_PG_DESC_FLIP_SQL)
+    cur.close()
     yield conn
     conn.close()
 
 
 @pytest.fixture(scope="module")
 def mssql_conn():
+    """Install v0.3.1 desc flip functions on MSSQL."""
     conn = pyodbc.connect(MSSQL_URL, autocommit=True)
     cur = conn.cursor()
     cur.execute(
@@ -47,6 +65,9 @@ def mssql_conn():
         "CREATE DATABASE heeranjid_test"
     )
     cur.execute("USE heeranjid_test")
+    for batch in mssql_schema.DESC_FLIP_TSQL.split("GO"):
+        if batch.strip():
+            cur.execute(batch)
     yield conn
     conn.close()
 
@@ -79,23 +100,15 @@ class TestHeerIdMaskEquivalence:
 
         # MSSQL side
         mssql_cur = mssql_conn.cursor()
-        mssql_cur.execute(
-            "SELECT dbo.heerid_to_desc(CAST(? AS bigint))", [value]
-        )
+        mssql_cur.execute("SELECT dbo.heerid_to_desc(CAST(? AS bigint))", [value])
         mssql_result = mssql_cur.fetchone()[0]
 
-        assert pg_result == mssql_result, (
-            f"v={value}: PG={pg_result:#x}, MSSQL={mssql_result:#x}"
-        )
+        assert pg_result == mssql_result, f"v={value}: PG={pg_result:#x}, MSSQL={mssql_result:#x}"
 
     @pytest.mark.parametrize("value", HEER_TEST_VALUES)
-    def test_heerid_to_asc_is_inverse_on_both_vendors(
-        self, pg_conn, mssql_conn, value
-    ):
+    def test_heerid_to_asc_is_inverse_on_both_vendors(self, pg_conn, mssql_conn, value):
         pg_cur = pg_conn.cursor()
-        pg_cur.execute(
-            "SELECT heerid_to_asc(heerid_to_desc(%s::bigint))", [value]
-        )
+        pg_cur.execute("SELECT heerid_to_asc(heerid_to_desc(%s::bigint))", [value])
         assert pg_cur.fetchone()[0] == _to_i64(value)
 
         mssql_cur = mssql_conn.cursor()
@@ -116,9 +129,7 @@ RANJ_TEST_VALUES = [
 
 class TestRanjIdMaskEquivalence:
     @pytest.mark.parametrize("uuid_str", RANJ_TEST_VALUES)
-    def test_ranjid_to_desc_cross_vendor(
-        self, pg_conn, mssql_conn, uuid_str
-    ):
+    def test_ranjid_to_desc_cross_vendor(self, pg_conn, mssql_conn, uuid_str):
         u = uuid.UUID(uuid_str)
 
         # Postgres: ranjid_to_desc(uuid) → uuid
@@ -133,9 +144,7 @@ class TestRanjIdMaskEquivalence:
 
         # MSSQL: dbo.ranjid_to_desc(BINARY(16)) → BINARY(16)
         mssql_cur = mssql_conn.cursor()
-        mssql_cur.execute(
-            "SELECT dbo.ranjid_to_desc(CAST(? AS BINARY(16)))", [u.bytes]
-        )
+        mssql_cur.execute("SELECT dbo.ranjid_to_desc(CAST(? AS BINARY(16)))", [u.bytes])
         mssql_bytes = bytes(mssql_cur.fetchone()[0])
 
         assert pg_bytes == mssql_bytes, (
