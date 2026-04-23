@@ -64,8 +64,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //   * `pool`      — sqlx for DDL, CALL, and the cutover transaction.
     //   * `pg_client` — tokio-postgres for the `install_*` helpers,
     //                   which are generic over `GenericClient`.
+    // `heerid_next()` reads session-local `heer.node_id`, which is
+    // set per connection. Bind node_id=1 on every pool connection via
+    // `after_connect` so the CREATE TABLE DEFAULT + INSERTs below
+    // resolve regardless of which pool slot they land on.
     let pool = PgPoolOptions::new()
         .max_connections(4)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                sqlx::query("SELECT set_heer_node_id(1)")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
         .connect(&url)
         .await?;
     let (pg_client, pg_conn) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await?;

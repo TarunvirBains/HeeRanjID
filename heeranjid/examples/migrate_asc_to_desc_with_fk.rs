@@ -76,8 +76,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // --- Dual-connect: tokio-postgres for install helpers, sqlx for the rest ---
+    // Every sqlx pool connection binds session node_id=1 via
+    // `after_connect` so `heerid_next()` resolves regardless of slot.
     let pool = PgPoolOptions::new()
         .max_connections(4)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                sqlx::query("SELECT set_heer_node_id(1)")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
         .connect(&url)
         .await?;
 
