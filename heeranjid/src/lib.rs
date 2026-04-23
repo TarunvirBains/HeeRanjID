@@ -42,6 +42,8 @@ mod sqlx_codec;
 
 pub use convert::{ConflictKind, ConversionConflict, ConversionError};
 pub use error::Error;
+#[cfg(feature = "postgres")]
+pub use postgres_generate::GenerateError;
 pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerId, HeerIdParts};
 pub use heer_desc::HeerIdDesc;
 pub use precision::{RanjPrecision, generation_precision};

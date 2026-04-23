@@ -39,7 +39,7 @@ use crate::{HeerId, RanjId};
 
 /// Error returned by the [`postgres_generate`](self) helpers.
 ///
-/// Shape mirrors [`heeranjid_sqlx::GenerateError`] so callers can swap
+/// Shape mirrors `heeranjid_sqlx::GenerateError` so callers can swap
 /// between the two client stacks without restructuring their error
 /// handling. Transport and SQL-level failures surface through
 /// [`GenerateError::Database`]; the `Invalid*` variants fire only when

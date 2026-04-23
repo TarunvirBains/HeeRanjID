@@ -200,5 +200,13 @@ async fn generate_ranjids_returns_requested_count() {
         assert_eq!(id.into_parts().node_id, 1, "each id must belong to node 1");
     }
 
+    // IDs must be strictly increasing (time-ordered, ascending).
+    for pair in ids.windows(2) {
+        assert!(
+            pair[0] < pair[1],
+            "batch-generated RanjIds must be strictly ascending"
+        );
+    }
+
     teardown_schema(&client, schema_name).await;
 }
