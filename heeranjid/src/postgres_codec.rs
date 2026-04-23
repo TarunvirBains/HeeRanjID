@@ -28,7 +28,7 @@
 use postgres_types::{FromSql, IsNull, ToSql, Type, to_sql_checked};
 use uuid::Uuid;
 
-use crate::{HeerId, RanjId};
+use crate::{HeerId, HeerIdDesc, RanjId, RanjIdDesc};
 
 // ---------------------------------------------------------------------------
 // HeerId — BIGINT (int8)
@@ -93,6 +93,61 @@ impl<'a> FromSql<'a> for RanjId {
         RanjId::from_uuid(uuid).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)
     }
 
+    fn accepts(ty: &Type) -> bool {
+        *ty == Type::UUID
+    }
+}
+
+impl ToSql for HeerIdDesc {
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut bytes::BytesMut,
+    ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
+        <i64 as ToSql>::to_sql(&self.as_i64(), ty, out)
+    }
+    fn accepts(ty: &Type) -> bool {
+        *ty == Type::INT8
+    }
+    to_sql_checked!();
+}
+
+impl<'a> FromSql<'a> for HeerIdDesc {
+    fn from_sql(
+        ty: &Type,
+        raw: &'a [u8],
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        let v = <i64 as FromSql>::from_sql(ty, raw)?;
+        HeerIdDesc::from_i64(v).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)
+    }
+    fn accepts(ty: &Type) -> bool {
+        *ty == Type::INT8
+    }
+}
+
+impl ToSql for RanjIdDesc {
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut bytes::BytesMut,
+    ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
+        <Uuid as ToSql>::to_sql(&self.as_uuid(), ty, out)
+    }
+    fn accepts(ty: &Type) -> bool {
+        *ty == Type::UUID
+    }
+    to_sql_checked!();
+}
+
+impl<'a> FromSql<'a> for RanjIdDesc {
+    fn from_sql(
+        ty: &Type,
+        raw: &'a [u8],
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        let u = <Uuid as FromSql>::from_sql(ty, raw)?;
+        RanjIdDesc::from_uuid(u)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)
+    }
     fn accepts(ty: &Type) -> bool {
         *ty == Type::UUID
     }
