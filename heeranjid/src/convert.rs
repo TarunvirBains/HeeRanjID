@@ -194,6 +194,75 @@ impl RanjId {
     }
 }
 
+// ── Single-value `From` / `TryFrom` wrappers over the batch APIs ──
+//
+// These expose the batch conversion paths above for one-off callers. The
+// desc-typed conversions below reuse them to avoid duplicating the scaling
+// and precision-coercion logic.
+
+impl From<HeerId> for RanjId {
+    fn from(hid: HeerId) -> Self {
+        // `batch_to_ranjids` is infallible; a single-element call cannot fail.
+        HeerId::batch_to_ranjids(&[hid])
+            .into_iter()
+            .next()
+            .expect("batch_to_ranjids returns one entry per input")
+            .1
+    }
+}
+
+impl TryFrom<RanjId> for HeerId {
+    type Error = ConversionError;
+    fn try_from(rid: RanjId) -> Result<Self, Self::Error> {
+        // A single-element batch has no squashing, so any failure is a hard
+        // per-value error (node/timestamp overflow) — sequence overflow cannot
+        // occur with n=1.
+        let mut results = RanjId::batch_to_heerids(&[rid])?;
+        Ok(results
+            .pop()
+            .expect("batch_to_heerids returns one entry per input")
+            .1)
+    }
+}
+
+// ── HeerIdDesc ↔ RanjIdDesc ──
+//
+// Mirror of the asc conversions above. Identical failure modes on the
+// `TryFrom` direction (NodeIdOverflow, TimestampOverflow, SequenceOverflow);
+// see spec §4.5.
+
+impl From<crate::HeerIdDesc> for crate::RanjIdDesc {
+    fn from(hd: crate::HeerIdDesc) -> Self {
+        // Go logical → logical through the asc types to reuse the existing
+        // scaling + precision-coercion path. One XOR on each side.
+        let asc = crate::HeerId::new(hd.timestamp_ms(), hd.node_id(), hd.sequence())
+            .expect("HeerIdDesc always carries valid logical fields");
+        let r_asc: crate::RanjId = asc.into();
+        let parts = r_asc.into_parts();
+        crate::RanjIdDesc::new(
+            parts.timestamp,
+            parts.precision,
+            parts.node_id,
+            parts.sequence,
+        )
+        .expect("HeerId → RanjId is always lossless")
+    }
+}
+
+impl TryFrom<crate::RanjIdDesc> for crate::HeerIdDesc {
+    type Error = ConversionError;
+    fn try_from(rd: crate::RanjIdDesc) -> Result<Self, Self::Error> {
+        let r_asc = crate::RanjId::new(rd.timestamp(), rd.precision(), rd.node_id(), rd.sequence())
+            .expect("RanjIdDesc always carries valid logical fields");
+        let asc: crate::HeerId = crate::HeerId::try_from(r_asc)?;
+        let parts = asc.into_parts();
+        Ok(
+            crate::HeerIdDesc::new(parts.timestamp_ms, parts.node_id, parts.sequence)
+                .expect("fields validated by HeerId::try_from"),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -436,5 +505,44 @@ mod tests {
             assert_eq!(orig.timestamp_ms(), result.timestamp_ms());
             assert_eq!(orig.node_id(), result.node_id());
         }
+    }
+}
+
+#[cfg(test)]
+mod desc_tests {
+    use super::*;
+    use crate::precision::RanjPrecision;
+    use crate::{HeerIdDesc, RanjIdDesc};
+
+    #[test]
+    fn heer_desc_into_ranj_desc_preserves_logical_fields() {
+        let hd = HeerIdDesc::new(1_234_567, 42, 777).unwrap();
+        let rd: RanjIdDesc = hd.into();
+        assert_eq!(rd.node_id(), 42);
+        assert_eq!(rd.sequence(), 777);
+        // Timestamp in ms, scaled via generation precision.
+        let factor = crate::precision::generation_precision().from_millis_multiplier();
+        assert_eq!(rd.timestamp(), 1_234_567u128 * factor);
+    }
+
+    #[test]
+    fn ranj_desc_try_into_heer_desc_reports_node_overflow() {
+        let rd = RanjIdDesc::new(1000, RanjPrecision::Microseconds, 9999, 0).unwrap();
+        let err = HeerIdDesc::try_from(rd).unwrap_err();
+        assert!(matches!(err, ConversionError::NodeIdOverflow { .. }));
+    }
+
+    #[test]
+    fn ranj_desc_try_into_heer_desc_preserves_timestamp_and_node() {
+        // A RanjIdDesc with fields that fit in HeerId should convert cleanly.
+        // Note: per `batch_to_heerids` semantics, sequence is reassigned
+        // within each (ts_ms, node_id) group — for a single-element batch it
+        // is always 0. Timestamp and node_id are preserved.
+        let hd_orig = HeerIdDesc::new(1_234_567, 42, 777).unwrap();
+        let rd: RanjIdDesc = hd_orig.into();
+        let hd_back = HeerIdDesc::try_from(rd).unwrap();
+        assert_eq!(hd_back.timestamp_ms(), 1_234_567);
+        assert_eq!(hd_back.node_id(), 42);
+        assert_eq!(hd_back.sequence(), 0);
     }
 }
