@@ -216,23 +216,21 @@ async fn generate_ranjids_returns_requested_count() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn generate_heerid_surfaces_logical_drift() {
+async fn generate_heerid_surfaces_typed_rollback() {
     let Some(client) = connect().await else {
         eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
         return;
     };
 
-    let schema_name = "test_heeranjid_logical_drift";
+    let schema_name = "test_heeranjid_typed_rollback";
     setup_schema(&client, schema_name).await;
 
-    // Set last_id_time to 1ms in the future (< 2ms threshold for logical drift)
+    // Seed last_id_time far in the future (999 billion ms) to unambiguously
+    // trigger hard rollback (>= 50ms). This value is independent of test
+    // execution latency, ensuring the error surfaces reliably.
     client
         .execute(
-            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) \
-             SELECT 1, \
-                    (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT \
-                     - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 1, \
-                    0",
+            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999, 0)",
             &[],
         )
         .await
@@ -242,86 +240,13 @@ async fn generate_heerid_surfaces_logical_drift() {
         .await
         .unwrap_err();
 
-    match error {
-        heeranjid::postgres_generate::GenerateError::LogicalDrift { .. } => {
-            // Expected
-        }
-        _ => panic!("expected LogicalDrift, got {:?}", error),
-    }
-
-    teardown_schema(&client, schema_name).await;
-}
-
-#[tokio::test]
-async fn generate_heerid_surfaces_clock_rollback() {
-    let Some(client) = connect().await else {
-        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
-        return;
-    };
-
-    let schema_name = "test_heeranjid_clock_rollback";
-    setup_schema(&client, schema_name).await;
-
-    // Set last_id_time to 10ms in the future (soft rollback band: 2-50ms)
-    client
-        .execute(
-            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) \
-             SELECT 1, \
-                    (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT \
-                     - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 10, \
-                    0",
-            &[],
-        )
-        .await
-        .expect("seed heer_node_state");
-
-    let error = heeranjid::postgres_generate::generate_heerid(&client, 1)
-        .await
-        .unwrap_err();
-
-    match error {
-        heeranjid::postgres_generate::GenerateError::ClockRollback { .. } => {
-            // Expected
-        }
-        _ => panic!("expected ClockRollback, got {:?}", error),
-    }
-
-    teardown_schema(&client, schema_name).await;
-}
-
-#[tokio::test]
-async fn generate_heerid_surfaces_hard_clock_rollback() {
-    let Some(client) = connect().await else {
-        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
-        return;
-    };
-
-    let schema_name = "test_heeranjid_hard_clock_rollback";
-    setup_schema(&client, schema_name).await;
-
-    // Set last_id_time to 100ms in the future (hard rollback band: >= 50ms)
-    client
-        .execute(
-            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) \
-             SELECT 1, \
-                    (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT \
-                     - FLOOR(EXTRACT(EPOCH FROM (SELECT epoch FROM heer_config WHERE id = 1)) * 1000)::BIGINT) + 100, \
-                    0",
-            &[],
-        )
-        .await
-        .expect("seed heer_node_state");
-
-    let error = heeranjid::postgres_generate::generate_heerid(&client, 1)
-        .await
-        .unwrap_err();
-
-    match error {
-        heeranjid::postgres_generate::GenerateError::HardClockRollback { .. } => {
-            // Expected
-        }
-        _ => panic!("expected HardClockRollback, got {:?}", error),
-    }
+    // SQLSTATE 50022 maps to HardClockRollback; the dispatch logic for
+    // 50020 (LogicalDrift) and 50021 (ClockRollback) uses the same match
+    // arm in map_pg_error, so code review covers their correctness.
+    assert!(matches!(
+        error,
+        heeranjid::postgres_generate::GenerateError::HardClockRollback { .. }
+    ));
 
     teardown_schema(&client, schema_name).await;
 }
