@@ -1,10 +1,12 @@
-from heeranjid_django.fields import HeerIdField, RanjIdField
+from heeranjid_django.fields import HeerIdDescField, HeerIdField, RanjIdDescField, RanjIdField
 from heeranjid_django.managers import HeeRanjIdManager, HeeRanjIdManagerMixin, prefetch_ids
 
 default_app_config = "heeranjid_django.apps.HeeranjidConfig"
 __all__ = [
     "HeerIdField",
     "RanjIdField",
+    "HeerIdDescField",
+    "RanjIdDescField",
     "HeeRanjIdManager",
     "HeeRanjIdManagerMixin",
     "prefetch_ids",
@@ -12,6 +14,7 @@ __all__ = [
     "HeeRanjIdPrefetch",
     "HeeRanjIdPKMixin",
     "HeeRanjIdConversion",
+    "HeeRanjIdDirectionFlip",
 ]
 
 # Lazily import Django-model-dependent symbols so this module can be imported
@@ -21,6 +24,7 @@ _lazy = {
     "HeeRanjIdPrefetch": "heeranjid_django.enums",
     "HeeRanjIdPKMixin": "heeranjid_django.mixins",
     "HeeRanjIdConversion": "heeranjid_django.operations",
+    "HeeRanjIdDirectionFlip": "heeranjid_django.operations",
 }
 
 
