@@ -40,7 +40,7 @@ In short: **BIGSERIAL paints you into a corner, UUIDv7 charges you 16 bytes fore
 
 **Genuine reasons to pick something else:**
 
-- **Non-Postgres / non-MSSQL stack** — the database-side generators and migration tooling are half the value. MSSQL is planned for v0.3.1; other engines are not on the roadmap.
+- **Non-Postgres / non-MSSQL stack** — the database-side generators and migration tooling are half the value. Postgres and MSSQL are both supported as of v0.3.1 (flip functions, desc generators, bulk backfill, autofill triggers all reach feature parity across vendors); other engines are not on the roadmap.
 - **You can't coordinate node_id allocation at provisioning time** — fully ephemeral / autoscaled workers with no stable identity don't fit the `heer_nodes` model. (A single node_id for a single-writer deployment is the easy case; this caveat only bites at the scale-out edge.)
 
 > **Note on URL-opaque IDs.** If your external API needs opaque, enumeration-resistant identifiers, you don't have to give up time-ordered internal IDs. Keep `HeerId` / `RanjId` as your canonical primary key and wrap it with a deterministic reversible encoding at the edge. Stripe's `cus_XXXXX` pattern and Firebase's document IDs are both built this way — canonical time-ordered PK internally, deterministic reversible encoding externally.
