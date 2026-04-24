@@ -501,11 +501,13 @@ async fn generate_ids_desc_returns_flipped_batch() {
 
     let desc_ids: Vec<i64> = desc_rows.iter().map(|r| r.get::<_, i64>(0)).collect();
 
-    // (b) Flip actually happened: each desc ID equals heerid_to_desc(asc).
-    // Re-derive what the desc values *should* be by flipping each asc-shape
-    // back through heerid_to_desc, and assert equality. A wrapper that
-    // accidentally returned raw asc IDs would fail here because
-    // heerid_to_desc(asc) != asc for any real HeerId.
+    // (b) Involutive property: heerid_to_desc(heerid_to_asc(d)) == d for every
+    // returned id. Because both flip functions are the same XOR-mask operation,
+    // applying them in sequence is a no-op on any value — this is a tautology
+    // that documents the involutive (self-inverse) property of the flip
+    // functions, NOT a check that the wrapper applied the flip. A wrapper that
+    // returned raw asc IDs would still pass this assertion. The monotonicity
+    // check in (c) is what actually catches a missed flip.
     for d in &desc_ids {
         let roundtrip_row = client
             .query_one(
@@ -558,7 +560,9 @@ async fn generate_ids_desc_returns_flipped_batch() {
     );
 
     // (e) Explicit-node overload (`(in_node_id, requested_count, spanning)`)
-    // must also honour the row count and apply the flip.
+    // must honour the row count and apply the flip. Monotonicity of the
+    // asc-flipped sequence is the real flip-detection: if the wrapper forgot
+    // heerid_to_desc, heerid_to_asc would produce a *decreasing* sequence.
     let node_rows = client
         .query(
             "SELECT id FROM generate_ids_desc($1::integer, $2::integer, true)",
@@ -571,46 +575,64 @@ async fn generate_ids_desc_returns_flipped_batch() {
         requested as usize,
         "generate_ids_desc(node, n, spanning) must return n rows"
     );
+    let mut node_asc_ids: Vec<i64> = Vec::with_capacity(node_rows.len());
     for row in &node_rows {
         let d: i64 = row.get(0);
-        let rt_row = client
-            .query_one(
-                "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
-                &[&d],
-            )
+        let asc_row = client
+            .query_one("SELECT heerid_to_asc($1::bigint)", &[&d])
             .await
-            .expect("flip verification for explicit-node overload");
-        let rt: i64 = rt_row.get(0);
-        assert_eq!(d, rt, "explicit-node overload must apply the desc flip");
+            .expect("flip back to asc — explicit-node overload");
+        let asc: i64 = asc_row.get(0);
+        heeranjid::HeerId::from_i64(asc)
+            .expect("asc-shape must parse as a valid HeerId — explicit-node overload");
+        node_asc_ids.push(asc);
+    }
+    for window in node_asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "explicit-node overload: asc-flipped sequence must be strictly monotonic increasing; \
+             got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
     }
 
     // (f) allow_spanning=false variant: 2-arg session-node overload.
-    // Requesting 1 ID with spanning disabled must succeed.
+    // Request enough IDs to verify monotonicity (a single ID cannot establish
+    // ordering, so request `requested` IDs here too).
     let no_span_rows = client
         .query(
             "SELECT id FROM generate_ids_desc($1::integer, $2::boolean)",
-            &[&1_i32, &false],
+            &[&requested, &false],
         )
         .await
-        .expect("generate_ids_desc(1, false)");
+        .expect("generate_ids_desc(n, false)");
     assert_eq!(
         no_span_rows.len(),
-        1,
+        requested as usize,
         "generate_ids_desc(n, false) must return n rows"
     );
-    let no_span_id: i64 = no_span_rows[0].get(0);
-    let rt_row = client
-        .query_one(
-            "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
-            &[&no_span_id],
-        )
-        .await
-        .expect("flip verification for allow_spanning=false");
-    let rt: i64 = rt_row.get(0);
-    assert_eq!(
-        no_span_id, rt,
-        "allow_spanning=false overload must apply the desc flip"
-    );
+    let mut no_span_asc_ids: Vec<i64> = Vec::with_capacity(no_span_rows.len());
+    for row in &no_span_rows {
+        let d: i64 = row.get(0);
+        let asc_row = client
+            .query_one("SELECT heerid_to_asc($1::bigint)", &[&d])
+            .await
+            .expect("flip back to asc — allow_spanning=false overload");
+        let asc: i64 = asc_row.get(0);
+        heeranjid::HeerId::from_i64(asc)
+            .expect("asc-shape must parse as a valid HeerId — allow_spanning=false overload");
+        no_span_asc_ids.push(asc);
+    }
+    for window in no_span_asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "allow_spanning=false overload: asc-flipped sequence must be strictly monotonic \
+             increasing; got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
+    }
 
     // (g) Zero-count propagates the underlying error.
     let zero_err = client
@@ -694,9 +716,13 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         .map(|r| r.get::<_, uuid::Uuid>(0))
         .collect();
 
-    // (b) Flip actually happened: each desc ID equals ranjid_to_desc(asc).
-    // A wrapper that forgot the flip and returned raw asc IDs would produce
-    // ranjid_to_desc(ranjid_to_asc(d)) != d, failing this assertion.
+    // (b) Involutive property: ranjid_to_desc(ranjid_to_asc(d)) == d for every
+    // returned id. Because both flip functions apply the same XOR-mask, applying
+    // them in sequence is a no-op on any value — this is a tautology documenting
+    // the involutive (self-inverse) property of the flip functions, NOT a check
+    // that the wrapper applied the flip. A wrapper that returned raw asc IDs
+    // would still pass. The monotonicity check in (c) is what catches a missed
+    // flip.
     for d in &desc_ids {
         let roundtrip_row = client
             .query_one(
@@ -747,7 +773,9 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
     );
 
     // (e) Explicit-node overload (`(in_node_id, requested_count, spanning)`)
-    // must also honour row count and apply the flip.
+    // must honour the row count and apply the flip. Monotonicity of the
+    // asc-flipped sequence is the real flip-detection: if the wrapper forgot
+    // ranjid_to_desc, ranjid_to_asc would produce a *decreasing* sequence.
     let node_rows = client
         .query(
             "SELECT id FROM generate_ranjids_desc($1::integer, $2::integer, true)",
@@ -760,45 +788,64 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         requested as usize,
         "generate_ranjids_desc(node, n, spanning) must return n rows"
     );
+    let mut node_asc_ids: Vec<uuid::Uuid> = Vec::with_capacity(node_rows.len());
     for row in &node_rows {
         let d: uuid::Uuid = row.get(0);
-        let rt_row = client
-            .query_one(
-                "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
-                &[&d],
-            )
+        let asc_row = client
+            .query_one("SELECT ranjid_to_asc($1::uuid)", &[&d])
             .await
-            .expect("flip verification for explicit-node overload");
-        let rt: uuid::Uuid = rt_row.get(0);
-        assert_eq!(d, rt, "explicit-node overload must apply the desc flip");
+            .expect("flip back to asc — explicit-node overload");
+        let asc: uuid::Uuid = asc_row.get(0);
+        heeranjid::RanjId::from_uuid(asc)
+            .expect("asc-shape must parse as a valid RanjId — explicit-node overload");
+        node_asc_ids.push(asc);
+    }
+    for window in node_asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "explicit-node overload: asc-flipped sequence must be strictly monotonic increasing; \
+             got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
     }
 
     // (f) allow_spanning=false variant: 2-arg session-node overload.
+    // Request enough IDs to verify monotonicity (a single ID cannot establish
+    // ordering, so request `requested` IDs here too).
     let no_span_rows = client
         .query(
             "SELECT id FROM generate_ranjids_desc($1::integer, $2::boolean)",
-            &[&1_i32, &false],
+            &[&requested, &false],
         )
         .await
-        .expect("generate_ranjids_desc(1, false)");
+        .expect("generate_ranjids_desc(n, false)");
     assert_eq!(
         no_span_rows.len(),
-        1,
+        requested as usize,
         "generate_ranjids_desc(n, false) must return n rows"
     );
-    let no_span_id: uuid::Uuid = no_span_rows[0].get(0);
-    let rt_row = client
-        .query_one(
-            "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
-            &[&no_span_id],
-        )
-        .await
-        .expect("flip verification for allow_spanning=false");
-    let rt: uuid::Uuid = rt_row.get(0);
-    assert_eq!(
-        no_span_id, rt,
-        "allow_spanning=false overload must apply the desc flip"
-    );
+    let mut no_span_asc_ids: Vec<uuid::Uuid> = Vec::with_capacity(no_span_rows.len());
+    for row in &no_span_rows {
+        let d: uuid::Uuid = row.get(0);
+        let asc_row = client
+            .query_one("SELECT ranjid_to_asc($1::uuid)", &[&d])
+            .await
+            .expect("flip back to asc — allow_spanning=false overload");
+        let asc: uuid::Uuid = asc_row.get(0);
+        heeranjid::RanjId::from_uuid(asc)
+            .expect("asc-shape must parse as a valid RanjId — allow_spanning=false overload");
+        no_span_asc_ids.push(asc);
+    }
+    for window in no_span_asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "allow_spanning=false overload: asc-flipped sequence must be strictly monotonic \
+             increasing; got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
+    }
 
     // (g) Zero-count propagates the underlying error.
     let zero_err = client
