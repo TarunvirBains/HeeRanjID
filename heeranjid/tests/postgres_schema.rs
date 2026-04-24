@@ -429,3 +429,216 @@ async fn autofill_trigger_populates_desc_column_on_insert_and_update() {
         .await
         .expect("drop test schema");
 }
+
+// ---------------------------------------------------------------------------
+// Bulk descending generators (v0.3.4)
+// ---------------------------------------------------------------------------
+//
+// `generate_ids_desc(n)` and `generate_ranjids_desc(n)` are the batch
+// counterparts to `heerid_next_desc()` / `ranjid_next_desc()`. They compose
+// the existing asc allocator with the desc flip so callers get a column of
+// descending-shape IDs in a single round-trip, without reaching for the
+// flip primitives directly.
+//
+// These tests verify, for both HeerId and RanjId:
+//   a) the function returns exactly the requested row count;
+//   b) each returned desc-shape ID decodes back to a valid asc ID via the
+//      matching `*_to_asc` primitive (self-inverse XOR);
+//   c) the returned IDs are distinct.
+
+#[tokio::test]
+async fn generate_ids_desc_returns_flipped_batch() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_bulk_heerid_desc";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+    heeranjid::postgres_schema::install_all_desc_support(&client)
+        .await
+        .expect("install_all_desc_support");
+
+    // Pin the session node so the `requested_count`-only overload resolves.
+    client
+        .execute("SELECT set_heer_node_id(1)", &[])
+        .await
+        .expect("set_heer_node_id");
+
+    let requested: i32 = 8;
+
+    // (a) Row count: the one-arg overload returns `requested` rows.
+    let desc_rows = client
+        .query(
+            "SELECT id FROM generate_ids_desc($1::integer)",
+            &[&requested],
+        )
+        .await
+        .expect("bulk generate_ids_desc");
+    assert_eq!(
+        desc_rows.len(),
+        requested as usize,
+        "generate_ids_desc($1) must return exactly $1 rows"
+    );
+
+    // (b) Flip is self-inverse: desc -> asc -> each asc value must decode
+    // as a valid HeerId.
+    let desc_ids: Vec<i64> = desc_rows.iter().map(|r| r.get::<_, i64>(0)).collect();
+    for d in &desc_ids {
+        let asc_row = client
+            .query_one("SELECT heerid_to_asc($1::bigint)", &[d])
+            .await
+            .expect("flip back to asc");
+        let asc: i64 = asc_row.get(0);
+        heeranjid::HeerId::from_i64(asc)
+            .expect("asc-shape round-trip must parse as a valid HeerId");
+    }
+
+    // (c) Distinctness: the batch must contain no duplicates.
+    let mut sorted = desc_ids.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(
+        sorted.len(),
+        desc_ids.len(),
+        "generate_ids_desc must return distinct IDs"
+    );
+
+    // Explicit-node overload (`(in_node_id, requested_count, spanning)`)
+    // must also honour the row count.
+    let node_rows = client
+        .query(
+            "SELECT id FROM generate_ids_desc($1::integer, $2::integer, true)",
+            &[&1_i32, &requested],
+        )
+        .await
+        .expect("bulk generate_ids_desc with explicit node");
+    assert_eq!(
+        node_rows.len(),
+        requested as usize,
+        "generate_ids_desc(node, n, spanning) must return n rows"
+    );
+
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+}
+
+#[tokio::test]
+async fn generate_ranjids_desc_returns_flipped_batch() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_bulk_ranjid_desc";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+    heeranjid::postgres_schema::install_all_desc_support(&client)
+        .await
+        .expect("install_all_desc_support");
+
+    // Pin the session ranj node so the one-arg overload resolves.
+    client
+        .execute("SELECT set_heer_ranj_node_id(1)", &[])
+        .await
+        .expect("set_heer_ranj_node_id");
+
+    let requested: i32 = 8;
+
+    // (a) Row count.
+    let desc_rows = client
+        .query(
+            "SELECT id FROM generate_ranjids_desc($1::integer)",
+            &[&requested],
+        )
+        .await
+        .expect("bulk generate_ranjids_desc");
+    assert_eq!(
+        desc_rows.len(),
+        requested as usize,
+        "generate_ranjids_desc($1) must return exactly $1 rows"
+    );
+
+    // (b) Flip is self-inverse: desc -> asc -> each asc value must decode
+    // as a valid RanjId.
+    let desc_ids: Vec<uuid::Uuid> = desc_rows
+        .iter()
+        .map(|r| r.get::<_, uuid::Uuid>(0))
+        .collect();
+    for d in &desc_ids {
+        let asc_row = client
+            .query_one("SELECT ranjid_to_asc($1::uuid)", &[d])
+            .await
+            .expect("flip back to asc");
+        let asc: uuid::Uuid = asc_row.get(0);
+        heeranjid::RanjId::from_uuid(asc)
+            .expect("asc-shape round-trip must parse as a valid RanjId");
+    }
+
+    // (c) Distinctness.
+    let mut sorted = desc_ids.clone();
+    sorted.sort();
+    sorted.dedup();
+    assert_eq!(
+        sorted.len(),
+        desc_ids.len(),
+        "generate_ranjids_desc must return distinct IDs"
+    );
+
+    // Explicit-node overload (`(in_node_id, requested_count, spanning)`)
+    // must also honour row count.
+    let node_rows = client
+        .query(
+            "SELECT id FROM generate_ranjids_desc($1::integer, $2::integer, true)",
+            &[&1_i32, &requested],
+        )
+        .await
+        .expect("bulk generate_ranjids_desc with explicit node");
+    assert_eq!(
+        node_rows.len(),
+        requested as usize,
+        "generate_ranjids_desc(node, n, spanning) must return n rows"
+    );
+
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+}

@@ -693,6 +693,24 @@ $$ LANGUAGE sql VOLATILE;
 CREATE OR REPLACE FUNCTION ranjid_next_desc() RETURNS uuid AS $$
     SELECT ranjid_to_desc(ranjid_next());
 $$ LANGUAGE sql VOLATILE;
+
+-- Bulk counterparts (v0.3.4). Compose the matching asc allocator with
+-- the desc flip so callers get a column of descending-shape IDs in a
+-- single round-trip — use these from `bulk_create` / range-leasing
+-- paths that would otherwise call `heerid_next_desc()` per row.
+CREATE OR REPLACE FUNCTION generate_ids_desc(requested_count INTEGER)
+RETURNS TABLE(id BIGINT) AS $$
+    SELECT heerid_to_desc(id)
+    FROM generate_ids(current_heer_node_id(), requested_count, true);
+$$ LANGUAGE sql;
+
+CREATE OR REPLACE FUNCTION generate_ranjids_desc(requested_count INTEGER)
+RETURNS TABLE(id UUID) AS $$
+    SELECT ranjid_to_desc(id)
+    FROM generate_ranjids(current_heer_ranj_node_id(), requested_count, true);
+$$ LANGUAGE sql;
+-- Explicit-node overloads (`(node, count, spanning)`) and the two-arg
+-- `(count, spanning)` form exist too; see heeranjid/sql/functions/desc_generators.sql.
 ```
 
 ### 14.2 Flip primitives
