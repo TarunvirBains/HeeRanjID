@@ -499,9 +499,34 @@ async fn generate_ids_desc_returns_flipped_batch() {
         "generate_ids_desc($1) must return exactly $1 rows"
     );
 
-    // (b) Flip is self-inverse: desc -> asc -> each asc value must decode
-    // as a valid HeerId.
     let desc_ids: Vec<i64> = desc_rows.iter().map(|r| r.get::<_, i64>(0)).collect();
+
+    // (b) Flip actually happened: each desc ID equals heerid_to_desc(asc).
+    // Re-derive what the desc values *should* be by flipping each asc-shape
+    // back through heerid_to_desc, and assert equality. A wrapper that
+    // accidentally returned raw asc IDs would fail here because
+    // heerid_to_desc(asc) != asc for any real HeerId.
+    for d in &desc_ids {
+        let roundtrip_row = client
+            .query_one(
+                "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
+                &[d],
+            )
+            .await
+            .expect("heerid_to_desc(heerid_to_asc(d)) round-trip");
+        let roundtrip: i64 = roundtrip_row.get(0);
+        assert_eq!(
+            *d, roundtrip,
+            "heerid_to_desc(heerid_to_asc(d)) must equal d — wrapper must apply the flip"
+        );
+    }
+
+    // (c) Flip is self-inverse: desc -> asc -> each asc value must decode
+    // as a valid HeerId, and the asc sequence must be strictly monotonic
+    // increasing (which would break if the wrapper returned already-flipped
+    // values and heerid_to_asc then double-flipped them into non-monotonic
+    // noise).
+    let mut asc_ids: Vec<i64> = Vec::with_capacity(desc_ids.len());
     for d in &desc_ids {
         let asc_row = client
             .query_one("SELECT heerid_to_asc($1::bigint)", &[d])
@@ -510,9 +535,19 @@ async fn generate_ids_desc_returns_flipped_batch() {
         let asc: i64 = asc_row.get(0);
         heeranjid::HeerId::from_i64(asc)
             .expect("asc-shape round-trip must parse as a valid HeerId");
+        asc_ids.push(asc);
+    }
+    for window in asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "asc-flipped sequence must be strictly monotonic increasing; \
+             got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
     }
 
-    // (c) Distinctness: the batch must contain no duplicates.
+    // (d) Distinctness: the batch must contain no duplicates.
     let mut sorted = desc_ids.clone();
     sorted.sort_unstable();
     sorted.dedup();
@@ -522,8 +557,8 @@ async fn generate_ids_desc_returns_flipped_batch() {
         "generate_ids_desc must return distinct IDs"
     );
 
-    // Explicit-node overload (`(in_node_id, requested_count, spanning)`)
-    // must also honour the row count.
+    // (e) Explicit-node overload (`(in_node_id, requested_count, spanning)`)
+    // must also honour the row count and apply the flip.
     let node_rows = client
         .query(
             "SELECT id FROM generate_ids_desc($1::integer, $2::integer, true)",
@@ -535,6 +570,64 @@ async fn generate_ids_desc_returns_flipped_batch() {
         node_rows.len(),
         requested as usize,
         "generate_ids_desc(node, n, spanning) must return n rows"
+    );
+    for row in &node_rows {
+        let d: i64 = row.get(0);
+        let rt_row = client
+            .query_one(
+                "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
+                &[&d],
+            )
+            .await
+            .expect("flip verification for explicit-node overload");
+        let rt: i64 = rt_row.get(0);
+        assert_eq!(d, rt, "explicit-node overload must apply the desc flip");
+    }
+
+    // (f) allow_spanning=false variant: 2-arg session-node overload.
+    // Requesting 1 ID with spanning disabled must succeed.
+    let no_span_rows = client
+        .query(
+            "SELECT id FROM generate_ids_desc($1::integer, $2::boolean)",
+            &[&1_i32, &false],
+        )
+        .await
+        .expect("generate_ids_desc(1, false)");
+    assert_eq!(
+        no_span_rows.len(),
+        1,
+        "generate_ids_desc(n, false) must return n rows"
+    );
+    let no_span_id: i64 = no_span_rows[0].get(0);
+    let rt_row = client
+        .query_one(
+            "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
+            &[&no_span_id],
+        )
+        .await
+        .expect("flip verification for allow_spanning=false");
+    let rt: i64 = rt_row.get(0);
+    assert_eq!(
+        no_span_id, rt,
+        "allow_spanning=false overload must apply the desc flip"
+    );
+
+    // (g) Zero-count propagates the underlying error.
+    let zero_err = client
+        .query("SELECT id FROM generate_ids_desc($1::integer)", &[&0_i32])
+        .await;
+    assert!(
+        zero_err.is_err(),
+        "generate_ids_desc(0) must propagate requested_count error"
+    );
+    let pg_err = zero_err.unwrap_err();
+    let db_err = pg_err
+        .as_db_error()
+        .expect("generate_ids_desc(0) must raise a Postgres-level error");
+    assert!(
+        db_err.message().contains("requested_count must be greater than zero"),
+        "error message must mention requested_count; got: {}",
+        db_err.message()
     );
 
     client
@@ -596,12 +689,33 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         "generate_ranjids_desc($1) must return exactly $1 rows"
     );
 
-    // (b) Flip is self-inverse: desc -> asc -> each asc value must decode
-    // as a valid RanjId.
     let desc_ids: Vec<uuid::Uuid> = desc_rows
         .iter()
         .map(|r| r.get::<_, uuid::Uuid>(0))
         .collect();
+
+    // (b) Flip actually happened: each desc ID equals ranjid_to_desc(asc).
+    // A wrapper that forgot the flip and returned raw asc IDs would produce
+    // ranjid_to_desc(ranjid_to_asc(d)) != d, failing this assertion.
+    for d in &desc_ids {
+        let roundtrip_row = client
+            .query_one(
+                "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
+                &[d],
+            )
+            .await
+            .expect("ranjid_to_desc(ranjid_to_asc(d)) round-trip");
+        let roundtrip: uuid::Uuid = roundtrip_row.get(0);
+        assert_eq!(
+            *d, roundtrip,
+            "ranjid_to_desc(ranjid_to_asc(d)) must equal d — wrapper must apply the flip"
+        );
+    }
+
+    // (c) Flip is self-inverse: desc -> asc -> each asc value must decode as
+    // a valid RanjId, and the asc sequence must be strictly monotonic
+    // increasing (catches a wrapper that double-flips into non-monotonic noise).
+    let mut asc_ids: Vec<uuid::Uuid> = Vec::with_capacity(desc_ids.len());
     for d in &desc_ids {
         let asc_row = client
             .query_one("SELECT ranjid_to_asc($1::uuid)", &[d])
@@ -610,9 +724,19 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         let asc: uuid::Uuid = asc_row.get(0);
         heeranjid::RanjId::from_uuid(asc)
             .expect("asc-shape round-trip must parse as a valid RanjId");
+        asc_ids.push(asc);
+    }
+    for window in asc_ids.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "asc-flipped sequence must be strictly monotonic increasing; \
+             got {} then {} — wrapper may have skipped the desc flip",
+            window[0],
+            window[1],
+        );
     }
 
-    // (c) Distinctness.
+    // (d) Distinctness.
     let mut sorted = desc_ids.clone();
     sorted.sort();
     sorted.dedup();
@@ -622,8 +746,8 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         "generate_ranjids_desc must return distinct IDs"
     );
 
-    // Explicit-node overload (`(in_node_id, requested_count, spanning)`)
-    // must also honour row count.
+    // (e) Explicit-node overload (`(in_node_id, requested_count, spanning)`)
+    // must also honour row count and apply the flip.
     let node_rows = client
         .query(
             "SELECT id FROM generate_ranjids_desc($1::integer, $2::integer, true)",
@@ -635,6 +759,66 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         node_rows.len(),
         requested as usize,
         "generate_ranjids_desc(node, n, spanning) must return n rows"
+    );
+    for row in &node_rows {
+        let d: uuid::Uuid = row.get(0);
+        let rt_row = client
+            .query_one(
+                "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
+                &[&d],
+            )
+            .await
+            .expect("flip verification for explicit-node overload");
+        let rt: uuid::Uuid = rt_row.get(0);
+        assert_eq!(d, rt, "explicit-node overload must apply the desc flip");
+    }
+
+    // (f) allow_spanning=false variant: 2-arg session-node overload.
+    let no_span_rows = client
+        .query(
+            "SELECT id FROM generate_ranjids_desc($1::integer, $2::boolean)",
+            &[&1_i32, &false],
+        )
+        .await
+        .expect("generate_ranjids_desc(1, false)");
+    assert_eq!(
+        no_span_rows.len(),
+        1,
+        "generate_ranjids_desc(n, false) must return n rows"
+    );
+    let no_span_id: uuid::Uuid = no_span_rows[0].get(0);
+    let rt_row = client
+        .query_one(
+            "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
+            &[&no_span_id],
+        )
+        .await
+        .expect("flip verification for allow_spanning=false");
+    let rt: uuid::Uuid = rt_row.get(0);
+    assert_eq!(
+        no_span_id, rt,
+        "allow_spanning=false overload must apply the desc flip"
+    );
+
+    // (g) Zero-count propagates the underlying error.
+    let zero_err = client
+        .query(
+            "SELECT id FROM generate_ranjids_desc($1::integer)",
+            &[&0_i32],
+        )
+        .await;
+    assert!(
+        zero_err.is_err(),
+        "generate_ranjids_desc(0) must propagate requested_count error"
+    );
+    let pg_err = zero_err.unwrap_err();
+    let db_err = pg_err
+        .as_db_error()
+        .expect("generate_ranjids_desc(0) must raise a Postgres-level error");
+    assert!(
+        db_err.message().contains("requested_count must be greater than zero"),
+        "error message must mention requested_count; got: {}",
+        db_err.message()
     );
 
     client
