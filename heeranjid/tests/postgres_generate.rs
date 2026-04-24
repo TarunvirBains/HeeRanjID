@@ -230,7 +230,7 @@ async fn generate_heerid_surfaces_typed_rollback() {
     // execution latency, ensuring the error surfaces reliably.
     client
         .execute(
-            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999, 0)",
+            "INSERT INTO heer_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999, 0) ON CONFLICT (node_id) DO UPDATE SET last_id_time = EXCLUDED.last_id_time, last_sequence = EXCLUDED.last_sequence",
             &[],
         )
         .await
@@ -264,7 +264,7 @@ async fn generate_ranjid_surfaces_hard_clock_rollback() {
     // Set last_id_time to a very large value to trigger hard clock rollback
     client
         .execute(
-            "INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0)",
+            "INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0) ON CONFLICT (node_id) DO UPDATE SET last_id_time = EXCLUDED.last_id_time, last_sequence = EXCLUDED.last_sequence",
             &[],
         )
         .await
