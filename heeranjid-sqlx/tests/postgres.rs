@@ -1113,7 +1113,8 @@ async fn generate_heerid_surfaces_typed_rollback() {
     // execution latency, ensuring the error surfaces reliably.
     conn.execute(
         r#"INSERT INTO heer_node_state (node_id, last_id_time, last_sequence)
-           VALUES (1, 999999999999, 0)"#,
+           VALUES (1, 999999999999, 0)
+           ON CONFLICT (node_id) DO UPDATE SET last_id_time = EXCLUDED.last_id_time, last_sequence = EXCLUDED.last_sequence"#,
     )
     .await
     .unwrap();
@@ -1160,7 +1161,7 @@ async fn ranjid_sql_rejects_clock_rollback_typed() {
     .unwrap();
 
     conn.execute(
-        r#"INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0)"#,
+        r#"INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) VALUES (1, 999999999999999, 0) ON CONFLICT (node_id) DO UPDATE SET last_id_time = EXCLUDED.last_id_time, last_sequence = EXCLUDED.last_sequence"#,
     )
     .await
     .unwrap();
