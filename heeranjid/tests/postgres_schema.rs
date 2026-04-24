@@ -510,10 +510,7 @@ async fn generate_ids_desc_returns_flipped_batch() {
     // check in (c) is what actually catches a missed flip.
     for d in &desc_ids {
         let roundtrip_row = client
-            .query_one(
-                "SELECT heerid_to_desc(heerid_to_asc($1::bigint))",
-                &[d],
-            )
+            .query_one("SELECT heerid_to_desc(heerid_to_asc($1::bigint))", &[d])
             .await
             .expect("heerid_to_desc(heerid_to_asc(d)) round-trip");
         let roundtrip: i64 = roundtrip_row.get(0);
@@ -647,7 +644,9 @@ async fn generate_ids_desc_returns_flipped_batch() {
         .as_db_error()
         .expect("generate_ids_desc(0) must raise a Postgres-level error");
     assert!(
-        db_err.message().contains("requested_count must be greater than zero"),
+        db_err
+            .message()
+            .contains("requested_count must be greater than zero"),
         "error message must mention requested_count; got: {}",
         db_err.message()
     );
@@ -725,10 +724,7 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
     // flip.
     for d in &desc_ids {
         let roundtrip_row = client
-            .query_one(
-                "SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))",
-                &[d],
-            )
+            .query_one("SELECT ranjid_to_desc(ranjid_to_asc($1::uuid))", &[d])
             .await
             .expect("ranjid_to_desc(ranjid_to_asc(d)) round-trip");
         let roundtrip: uuid::Uuid = roundtrip_row.get(0);
@@ -863,7 +859,9 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         .as_db_error()
         .expect("generate_ranjids_desc(0) must raise a Postgres-level error");
     assert!(
-        db_err.message().contains("requested_count must be greater than zero"),
+        db_err
+            .message()
+            .contains("requested_count must be greater than zero"),
         "error message must mention requested_count; got: {}",
         db_err.message()
     );
