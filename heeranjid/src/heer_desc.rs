@@ -188,7 +188,10 @@ mod tests {
     #[test]
     fn zero_const_is_wire_zero_not_logical_zero() {
         assert_eq!(HeerIdDesc::ZERO.as_i64(), 0);
-        assert_eq!(HeerIdDesc::ZERO.timestamp_ms(), crate::HeerId::MAX_TIMESTAMP_MS);
+        assert_eq!(
+            HeerIdDesc::ZERO.timestamp_ms(),
+            crate::HeerId::MAX_TIMESTAMP_MS
+        );
         assert_eq!(HeerIdDesc::ZERO.node_id(), 0);
         assert_eq!(HeerIdDesc::ZERO.sequence(), crate::HeerId::MAX_SEQUENCE);
     }
