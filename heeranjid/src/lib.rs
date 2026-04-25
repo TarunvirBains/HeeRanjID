@@ -19,6 +19,29 @@
 //! secondary descending index or a reverse scan. See the `asc-to-desc`
 //! migration playbook at `docs/migrations/asc-to-desc.md` for the workflow
 //! that flips an existing column under live writes.
+//!
+//! ## Sentinel values
+//!
+//! Each of the four ID types exposes a `pub const ZERO` for use as a
+//! placeholder before persistence (e.g., when constructing a row
+//! in-memory before `INSERT ... RETURNING id` assigns the real ID):
+//!
+//! ```
+//! # use heeranjid::HeerId;
+//! let id = HeerId::ZERO;
+//! assert!(id.is_zero());
+//! ```
+//!
+//! The sentinel is the wire-zero bit pattern. For [`HeerId`] /
+//! [`HeerIdDesc`] this is provably outside the image of `generate_id()`
+//! because production timestamps are always non-zero. For [`RanjId`] /
+//! [`RanjIdDesc`] this is the RFC 4122 §4.1.7 nil UUID, which is
+//! structurally invalid as UUIDv8 — see each type's documentation for
+//! the sentinel-only contract.
+//!
+//! For desc-encoded variants, the wire-zero bit pattern does not
+//! correspond to logical-zero components; see each type's `ZERO`
+//! documentation for the decoded component values.
 
 mod convert;
 mod error;

@@ -38,6 +38,16 @@ impl HeerId {
     pub const MAX_TIMESTAMP_MS: u64 = HEER_TIMESTAMP_MASK;
     pub const MAX_NODE_ID: u16 = HEER_NODE_ID_MASK as u16;
     pub const MAX_SEQUENCE: u16 = HEER_SEQUENCE_MASK as u16;
+    /// Sentinel value (wire-zero) for use as a placeholder ID before
+    /// persistence — e.g., when constructing a row in memory before an
+    /// `INSERT ... RETURNING id` assigns the real ID.
+    ///
+    /// Safe as a sentinel: the 41-bit timestamp field of a real
+    /// `generate_id()` output is wall-clock-derived from a non-zero
+    /// `CURRENT_TIMESTAMP` epoch, so the all-zero bit pattern is provably
+    /// outside the image of the generator. Round-trips cleanly through
+    /// [`from_i64`](Self::from_i64), `Display`/`FromStr`, and serde.
+    pub const ZERO: Self = Self(0);
 
     pub fn new(timestamp_ms: u64, node_id: u16, sequence: u16) -> Result<Self, Error> {
         if timestamp_ms > Self::MAX_TIMESTAMP_MS {
@@ -84,8 +94,13 @@ impl HeerId {
         Self(raw)
     }
 
-    pub fn as_i64(self) -> i64 {
+    pub const fn as_i64(self) -> i64 {
         self.0
+    }
+
+    /// Returns `true` iff `self == HeerId::ZERO`. Mirrors `Duration::is_zero()`.
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
     }
 
     pub fn into_parts(self) -> HeerIdParts {
@@ -154,5 +169,30 @@ mod tests {
         let derived: i64 = (((1i64 << 41) - 1) << 22) | ((1i64 << 13) - 1);
         assert_eq!(derived, HEER_FLIP_MASK);
         assert_eq!(HEER_FLIP_MASK, 9_223_372_036_850_589_695);
+    }
+
+    #[test]
+    fn zero_const_round_trips_through_from_i64() {
+        assert_eq!(HeerId::ZERO, HeerId::from_i64(0).unwrap());
+        assert_eq!(HeerId::ZERO.as_i64(), 0);
+    }
+
+    #[test]
+    fn zero_const_round_trips_through_serde() {
+        let json = serde_json::to_string(&HeerId::ZERO).unwrap();
+        let parsed: HeerId = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, HeerId::ZERO);
+    }
+
+    #[test]
+    fn is_zero_predicate() {
+        assert!(HeerId::ZERO.is_zero());
+        assert!(!HeerId::new(1, 0, 0).unwrap().is_zero());
+    }
+
+    #[test]
+    fn zero_orders_before_real_ids() {
+        let real = HeerId::new(1, 0, 0).unwrap();
+        assert!(HeerId::ZERO < real);
     }
 }
