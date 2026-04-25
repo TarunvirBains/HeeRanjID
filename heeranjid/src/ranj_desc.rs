@@ -20,6 +20,17 @@ pub struct RanjIdDesc(
 );
 
 impl RanjIdDesc {
+    /// Sentinel value (wire-zero on the descending-encoded side, i.e.
+    /// the nil UUID, RFC 4122 §4.1.7).
+    ///
+    /// **Sentinel-only:** same contract as [`RanjId::ZERO`](crate::RanjId::ZERO) —
+    /// `RanjIdDesc::from_uuid(RanjIdDesc::ZERO.as_uuid())` returns
+    /// `Err(Error::InvalidRanjIdVersion)`. Additionally, the desc
+    /// flip mask preserves version, variant, precision, and node bits,
+    /// so component decoders on `ZERO` yield meaningless logical
+    /// values. Identity-comparison only; never deserialize.
+    pub const ZERO: Self = Self(Uuid::from_u128(0));
+
     pub fn new(
         timestamp: u128,
         precision: RanjPrecision,
@@ -48,6 +59,11 @@ impl RanjIdDesc {
     /// Stored bits; equal to what Postgres holds.
     pub fn as_uuid(self) -> Uuid {
         self.0
+    }
+
+    /// Returns `true` iff `self == RanjIdDesc::ZERO`.
+    pub const fn is_zero(self) -> bool {
+        self.0.is_nil()
     }
 
     pub fn timestamp(self) -> u128 {
@@ -168,5 +184,23 @@ mod tests {
             assert_eq!(id.precision(), prec);
             assert_eq!(id.timestamp(), 1_000_000);
         }
+    }
+
+    #[test]
+    fn zero_const_is_nil_uuid() {
+        assert_eq!(RanjIdDesc::ZERO.as_uuid(), Uuid::nil());
+    }
+
+    #[test]
+    fn zero_const_is_sentinel_only_fails_validation() {
+        let err = RanjIdDesc::from_uuid(RanjIdDesc::ZERO.as_uuid()).unwrap_err();
+        assert_eq!(err, Error::InvalidRanjIdVersion);
+    }
+
+    #[test]
+    fn is_zero_predicate() {
+        assert!(RanjIdDesc::ZERO.is_zero());
+        let real = RanjIdDesc::new(1, RanjPrecision::Microseconds, 0, 0).unwrap();
+        assert!(!real.is_zero());
     }
 }

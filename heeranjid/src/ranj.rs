@@ -43,6 +43,17 @@ impl RanjId {
     pub const MAX_TIMESTAMP: u128 = RANJ_TIMESTAMP_MASK;
     pub const MAX_NODE_ID: u16 = (1u16 << 15) - 1;
     pub const MAX_SEQUENCE: u16 = u16::MAX;
+    /// Sentinel value: the nil UUID (RFC 4122 §4.1.7) for use as a
+    /// placeholder ID before persistence.
+    ///
+    /// **Sentinel-only:** the nil UUID has version=0 and variant=0,
+    /// neither of which match the UUIDv8 / RFC 4122 values that
+    /// [`from_uuid`](Self::from_uuid) validates. Consequently
+    /// `RanjId::from_uuid(RanjId::ZERO.as_uuid())` returns
+    /// `Err(Error::InvalidRanjIdVersion)`. Use as an in-memory
+    /// placeholder for unpersisted rows; check with
+    /// [`is_zero`](Self::is_zero) before serialization.
+    pub const ZERO: Self = Self(Uuid::from_u128(0));
 
     pub fn new(
         timestamp: u128,
@@ -106,6 +117,11 @@ impl RanjId {
 
     pub fn as_uuid(self) -> Uuid {
         self.0
+    }
+
+    /// Returns `true` iff `self == RanjId::ZERO` (the nil UUID).
+    pub const fn is_zero(self) -> bool {
+        self.0.is_nil()
     }
 
     pub fn into_parts(self) -> RanjIdParts {
@@ -202,5 +218,23 @@ mod tests {
             (raw >> 16) & ((1u128 << 15) - 1),
             "node preserved"
         );
+    }
+
+    #[test]
+    fn zero_const_is_nil_uuid() {
+        assert_eq!(RanjId::ZERO.as_uuid(), Uuid::nil());
+    }
+
+    #[test]
+    fn zero_const_is_sentinel_only_fails_validation() {
+        let err = RanjId::from_uuid(RanjId::ZERO.as_uuid()).unwrap_err();
+        assert_eq!(err, Error::InvalidRanjIdVersion);
+    }
+
+    #[test]
+    fn is_zero_predicate() {
+        assert!(RanjId::ZERO.is_zero());
+        let real = RanjId::new(1, crate::precision::RanjPrecision::Microseconds, 0, 0).unwrap();
+        assert!(!real.is_zero());
     }
 }

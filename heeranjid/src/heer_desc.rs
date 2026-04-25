@@ -18,6 +18,12 @@ pub struct HeerIdDesc(
 );
 
 impl HeerIdDesc {
+    /// Sentinel value (wire-zero) for use as a placeholder desc ID before
+    /// persistence. This is wire-zero, not logical-zero: its decoded
+    /// components are `timestamp_ms() == HeerId::MAX_TIMESTAMP_MS`,
+    /// `sequence() == HeerId::MAX_SEQUENCE`, and `node_id() == 0`.
+    pub const ZERO: Self = Self(0);
+
     /// Construct from logical components; stored bits are flipped internally.
     pub fn new(timestamp_ms: u64, node_id: u16, sequence: u16) -> Result<Self, Error> {
         let asc = HeerId::new(timestamp_ms, node_id, sequence)?;
@@ -35,8 +41,13 @@ impl HeerIdDesc {
     }
 
     /// The stored bits (desc form); equal to the value the database holds.
-    pub fn as_i64(self) -> i64 {
+    pub const fn as_i64(self) -> i64 {
         self.0
+    }
+
+    /// Returns `true` iff `self == HeerIdDesc::ZERO`.
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
     }
 
     /// Logical timestamp in milliseconds.
@@ -172,5 +183,35 @@ mod tests {
         assert_eq!(json, format!("\"{}\"", id.as_i64()));
         let parsed: HeerIdDesc = serde_json::from_str(&json).unwrap();
         assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn zero_const_is_wire_zero_not_logical_zero() {
+        assert_eq!(HeerIdDesc::ZERO.as_i64(), 0);
+        assert_eq!(
+            HeerIdDesc::ZERO.timestamp_ms(),
+            crate::HeerId::MAX_TIMESTAMP_MS
+        );
+        assert_eq!(HeerIdDesc::ZERO.node_id(), 0);
+        assert_eq!(HeerIdDesc::ZERO.sequence(), crate::HeerId::MAX_SEQUENCE);
+    }
+
+    #[test]
+    fn zero_const_round_trips_through_from_i64() {
+        assert_eq!(HeerIdDesc::ZERO, HeerIdDesc::from_i64(0).unwrap());
+        assert_eq!(HeerIdDesc::ZERO.as_i64(), 0);
+    }
+
+    #[test]
+    fn zero_const_round_trips_through_serde() {
+        let json = serde_json::to_string(&HeerIdDesc::ZERO).unwrap();
+        let parsed: HeerIdDesc = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, HeerIdDesc::ZERO);
+    }
+
+    #[test]
+    fn is_zero_predicate() {
+        assert!(HeerIdDesc::ZERO.is_zero());
+        assert!(!HeerIdDesc::new(1, 0, 0).unwrap().is_zero());
     }
 }
