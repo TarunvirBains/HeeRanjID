@@ -1,3 +1,8 @@
+DO $install$
+DECLARE
+    _sch text := COALESCE(current_schema(), 'public');
+BEGIN
+    EXECUTE format($sql$
 CREATE OR REPLACE FUNCTION generate_ids(
     in_node_id INTEGER,
     requested_count INTEGER,
@@ -5,7 +10,8 @@ CREATE OR REPLACE FUNCTION generate_ids(
 )
 RETURNS TABLE(id BIGINT)
 LANGUAGE plpgsql
-AS $$
+SET search_path = %I, pg_catalog
+AS $func$
 DECLARE
     epoch_ms BIGINT;
     now_ms BIGINT;
@@ -25,13 +31,13 @@ BEGIN
     END IF;
 
     IF in_node_id IS NULL OR in_node_id < 0 OR in_node_id > 511 THEN
-        RAISE EXCEPTION 'node_id % is out of range for HeerId (0..511)', in_node_id;
+        RAISE EXCEPTION 'node_id %% is out of range for HeerId (0..511)', in_node_id;
     END IF;
 
     IF NOT EXISTS (
         SELECT 1 FROM heer_nodes WHERE node_id = in_node_id AND is_active = true
     ) THEN
-        RAISE EXCEPTION 'node_id % is not registered as an active Heer node', in_node_id;
+        RAISE EXCEPTION 'node_id %% is not registered as an active Heer node', in_node_id;
     END IF;
 
     SELECT FLOOR(EXTRACT(EPOCH FROM c.epoch) * 1000)::BIGINT
@@ -60,13 +66,13 @@ BEGIN
     rollback_ms := last_time - now_ms;
     IF rollback_ms > 0 THEN
         IF rollback_ms < 2 THEN
-            RAISE EXCEPTION 'logical future drift for node % (% ms) — likely batch-induced, check batch sizing', in_node_id, rollback_ms
+            RAISE EXCEPTION 'logical future drift for node %% (%% ms) — likely batch-induced, check batch sizing', in_node_id, rollback_ms
                 USING ERRCODE = '50021';
         ELSIF rollback_ms < 50 THEN
-            RAISE EXCEPTION 'clock rollback detected for node % (% ms)', in_node_id, rollback_ms
+            RAISE EXCEPTION 'clock rollback detected for node %% (%% ms)', in_node_id, rollback_ms
                 USING ERRCODE = '50020';
         ELSE
-            RAISE EXCEPTION 'hard clock rollback detected for node % (% ms)', in_node_id, rollback_ms
+            RAISE EXCEPTION 'hard clock rollback detected for node %% (%% ms)', in_node_id, rollback_ms
                 USING ERRCODE = '50022';
         END IF;
     END IF;
@@ -80,7 +86,7 @@ BEGIN
     available_this_tick := 8192 - next_sequence;
     IF NOT allow_spanning AND requested_count > available_this_tick THEN
         RAISE EXCEPTION
-            'requested % IDs but only % remain in millisecond % for node %',
+            'requested %% IDs but only %% remain in millisecond %% for node %%',
             requested_count,
             available_this_tick,
             current_tick,
@@ -115,7 +121,10 @@ BEGIN
         updated_at = CURRENT_TIMESTAMP
     WHERE node_id = in_node_id;
 END;
-$$;
+$func$;
+$sql$, _sch);
+END;
+$install$;
 
 CREATE OR REPLACE FUNCTION generate_ids(
     requested_count INTEGER,
