@@ -53,13 +53,126 @@ impl RanjPrecision {
 
 static GENERATION_PRECISION: OnceLock<RanjPrecision> = OnceLock::new();
 
+/// Parse `RANJID_PRECISION` without panicking.
+///
+/// Returns `Ok(precision)` for a recognized value or when the variable is
+/// unset (defaulting to [`RanjPrecision::Nanoseconds`]), and
+/// `Err(message)` when the variable is set to an unrecognized value.
+///
+/// Call this during application startup to fail fast with a typed error
+/// instead of receiving a panic on the first ID generation.
+///
+/// # Example
+///
+/// ```rust
+/// use heeranjid::precision::try_generation_precision;
+///
+/// fn main() {
+///     let precision = try_generation_precision()
+///         .expect("RANJID_PRECISION is set to an invalid value");
+///     // … rest of startup
+/// }
+/// ```
+pub fn try_generation_precision() -> Result<RanjPrecision, String> {
+    match std::env::var("RANJID_PRECISION").as_deref() {
+        Ok("us") => Ok(RanjPrecision::Microseconds),
+        Ok("ns") => Ok(RanjPrecision::Nanoseconds),
+        Ok("ps") => Ok(RanjPrecision::Picoseconds),
+        Ok("fs") => Ok(RanjPrecision::Femtoseconds),
+        Ok(invalid) => Err(format!(
+            "RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"
+        )),
+        Err(_) => Ok(RanjPrecision::Nanoseconds), // unset → default
+    }
+}
+
+/// Return the configured generation precision.
+///
+/// Reads `RANJID_PRECISION` on first call and caches the result for the
+/// lifetime of the process.  Valid values are `us`, `ns`, `ps`, and `fs`.
+/// When the variable is unset the default is [`RanjPrecision::Nanoseconds`].
+///
+/// # Panics
+///
+/// Panics if `RANJID_PRECISION` is set to an unrecognized value.  Because the
+/// result is cached in a [`OnceLock`], the panic occurs on the *first* call —
+/// typically the first ID generation — not at process startup.  To validate
+/// the configuration eagerly and handle errors without panicking, call
+/// [`try_generation_precision()`] during initialization and propagate or
+/// unwrap the result there.
 pub fn generation_precision() -> RanjPrecision {
-    *GENERATION_PRECISION.get_or_init(|| match std::env::var("RANJID_PRECISION").as_deref() {
-        Ok("us") => RanjPrecision::Microseconds,
-        Ok("ns") => RanjPrecision::Nanoseconds,
-        Ok("ps") => RanjPrecision::Picoseconds,
-        Ok("fs") => RanjPrecision::Femtoseconds,
-        Ok(invalid) => panic!("RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"),
-        Err(_) => RanjPrecision::Nanoseconds, // unset → default
-    })
+    *GENERATION_PRECISION
+        .get_or_init(|| try_generation_precision().expect("invalid RANJID_PRECISION"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Guard against test pollution: these tests set env vars and must not
+    // touch the global OnceLock (which is already initialized in the test
+    // binary if other tests ran first).  We call try_generation_precision()
+    // directly — it always reads the env var fresh.
+
+    #[test]
+    fn try_valid_us() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::set_var("RANJID_PRECISION", "us") };
+        assert_eq!(try_generation_precision(), Ok(RanjPrecision::Microseconds));
+        // SAFETY: same as above.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+    }
+
+    #[test]
+    fn try_valid_ns() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::set_var("RANJID_PRECISION", "ns") };
+        assert_eq!(try_generation_precision(), Ok(RanjPrecision::Nanoseconds));
+        // SAFETY: same as above.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+    }
+
+    #[test]
+    fn try_valid_ps() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::set_var("RANJID_PRECISION", "ps") };
+        assert_eq!(try_generation_precision(), Ok(RanjPrecision::Picoseconds));
+        // SAFETY: same as above.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+    }
+
+    #[test]
+    fn try_valid_fs() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::set_var("RANJID_PRECISION", "fs") };
+        assert_eq!(try_generation_precision(), Ok(RanjPrecision::Femtoseconds));
+        // SAFETY: same as above.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+    }
+
+    #[test]
+    fn try_unset_defaults_to_nanoseconds() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+        assert_eq!(try_generation_precision(), Ok(RanjPrecision::Nanoseconds));
+    }
+
+    #[test]
+    fn try_invalid_returns_err() {
+        // SAFETY: single-threaded test; no concurrent env access.
+        unsafe { std::env::set_var("RANJID_PRECISION", "nanoseconds") };
+        let result = try_generation_precision();
+        // SAFETY: same as above.
+        unsafe { std::env::remove_var("RANJID_PRECISION") };
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("nanoseconds"),
+            "error message should contain the invalid value, got: {msg}"
+        );
+        assert!(
+            msg.contains("us") && msg.contains("ns") && msg.contains("ps") && msg.contains("fs"),
+            "error message should list valid options, got: {msg}"
+        );
+    }
 }

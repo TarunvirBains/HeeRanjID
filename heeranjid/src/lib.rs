@@ -69,7 +69,7 @@ pub use heer::{HEER_NODE_ID_BITS, HEER_SEQUENCE_BITS, HEER_TIMESTAMP_BITS, HeerI
 pub use heer_desc::HeerIdDesc;
 #[cfg(feature = "postgres")]
 pub use postgres_generate::GenerateError;
-pub use precision::{RanjPrecision, generation_precision};
+pub use precision::{RanjPrecision, generation_precision, try_generation_precision};
 pub use ranj::{
     RANJ_NODE_ID_BITS, RANJ_PRECISION_BITS, RANJ_SEQUENCE_BITS, RANJ_TIMESTAMP_BITS, RanjId,
     RanjIdParts,
