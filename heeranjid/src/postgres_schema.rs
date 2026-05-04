@@ -104,11 +104,13 @@ pub const INSTALL_SQL: &str = concat!(
 
 /// `heer_configure()` stored procedure — reads `heer_config`, validates
 /// the epoch/precision settings, regenerates `generate_ids` and
-/// `generate_ranjids` with baked-in constants, resets node state, and
-/// runs a smoke test. Call this after seeding `heer_config` to activate
-/// the configured generation path.
-pub const CONFIGURE_SQL: &str =
-    include_str!("../../sql/postgres/functions/configure.sql");
+/// `generate_ranjids` with baked-in constants, and runs a smoke test.
+///
+/// By default (`force_reset_state = false`), calling `heer_configure()`
+/// does **NOT** reset existing node state. Pass `heer_configure(true)`
+/// explicitly when changing epoch or precision to invalidate stored
+/// timestamps.
+pub const CONFIGURE_SQL: &str = include_str!("../sql/functions/configure.sql");
 
 /// Seed SQL — inserts the default node row (node_id = 1).
 pub const SEED_SQL: &str = include_str!("../sql/seed.sql");
@@ -144,8 +146,13 @@ where
 /// Call this after seeding `heer_config` to activate the configured ID
 /// generation path. `heer_configure()` reads the `heer_config` row,
 /// validates the epoch and precision settings, regenerates
-/// `generate_ids` / `generate_ranjids` with baked-in constants, resets
-/// node state, and runs a smoke test.
+/// `generate_ids` / `generate_ranjids` with baked-in constants, and
+/// runs a smoke test.
+///
+/// By default (`force_reset_state = false`), calling `heer_configure()`
+/// does **NOT** reset existing node state. Pass `heer_configure(true)`
+/// explicitly when changing epoch or precision to invalidate stored
+/// timestamps.
 pub async fn install_configure<C>(client: &C) -> Result<(), tokio_postgres::Error>
 where
     C: GenericClient + ?Sized,

@@ -74,15 +74,20 @@ static GENERATION_PRECISION: OnceLock<RanjPrecision> = OnceLock::new();
 /// }
 /// ```
 pub fn try_generation_precision() -> Result<RanjPrecision, String> {
-    match std::env::var("RANJID_PRECISION").as_deref() {
-        Ok("us") => Ok(RanjPrecision::Microseconds),
-        Ok("ns") => Ok(RanjPrecision::Nanoseconds),
-        Ok("ps") => Ok(RanjPrecision::Picoseconds),
-        Ok("fs") => Ok(RanjPrecision::Femtoseconds),
-        Ok(invalid) => Err(format!(
-            "RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"
-        )),
-        Err(_) => Ok(RanjPrecision::Nanoseconds), // unset → default
+    match std::env::var("RANJID_PRECISION") {
+        Err(std::env::VarError::NotPresent) => Ok(RanjPrecision::Nanoseconds),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err("RANJID_PRECISION is set but not valid UTF-8".to_string())
+        }
+        Ok(val) => match val.as_str() {
+            "us" => Ok(RanjPrecision::Microseconds),
+            "ns" => Ok(RanjPrecision::Nanoseconds),
+            "ps" => Ok(RanjPrecision::Picoseconds),
+            "fs" => Ok(RanjPrecision::Femtoseconds),
+            invalid => Err(format!(
+                "RANJID_PRECISION must be one of: us, ns, ps, fs (got '{invalid}')"
+            )),
+        },
     }
 }
 
@@ -108,15 +113,21 @@ pub fn generation_precision() -> RanjPrecision {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     // Guard against test pollution: these tests set env vars and must not
     // touch the global OnceLock (which is already initialized in the test
     // binary if other tests ran first).  We call try_generation_precision()
     // directly — it always reads the env var fresh.
+    //
+    // All tests that mutate RANJID_PRECISION are annotated #[serial] so
+    // Rust's parallel test runner serialises them and prevents races on the
+    // process-global env.
 
     #[test]
+    #[serial]
     fn try_valid_us() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::set_var("RANJID_PRECISION", "us") };
         assert_eq!(try_generation_precision(), Ok(RanjPrecision::Microseconds));
         // SAFETY: same as above.
@@ -124,8 +135,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn try_valid_ns() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::set_var("RANJID_PRECISION", "ns") };
         assert_eq!(try_generation_precision(), Ok(RanjPrecision::Nanoseconds));
         // SAFETY: same as above.
@@ -133,8 +145,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn try_valid_ps() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::set_var("RANJID_PRECISION", "ps") };
         assert_eq!(try_generation_precision(), Ok(RanjPrecision::Picoseconds));
         // SAFETY: same as above.
@@ -142,8 +155,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn try_valid_fs() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::set_var("RANJID_PRECISION", "fs") };
         assert_eq!(try_generation_precision(), Ok(RanjPrecision::Femtoseconds));
         // SAFETY: same as above.
@@ -151,15 +165,17 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn try_unset_defaults_to_nanoseconds() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::remove_var("RANJID_PRECISION") };
         assert_eq!(try_generation_precision(), Ok(RanjPrecision::Nanoseconds));
     }
 
     #[test]
+    #[serial]
     fn try_invalid_returns_err() {
-        // SAFETY: single-threaded test; no concurrent env access.
+        // SAFETY: serialised by #[serial]; no concurrent env access.
         unsafe { std::env::set_var("RANJID_PRECISION", "nanoseconds") };
         let result = try_generation_precision();
         // SAFETY: same as above.
@@ -174,5 +190,33 @@ mod tests {
             msg.contains("us") && msg.contains("ns") && msg.contains("ps") && msg.contains("fs"),
             "error message should list valid options, got: {msg}"
         );
+    }
+
+    #[test]
+    #[serial]
+    fn try_non_unicode_returns_err() {
+        use std::ffi::OsStr;
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            // A byte sequence that is not valid UTF-8.
+            let bad = OsStr::from_bytes(&[0xFF]);
+            // SAFETY: serialised by #[serial]; no concurrent env access.
+            unsafe { std::env::set_var("RANJID_PRECISION", bad) };
+            let result = try_generation_precision();
+            unsafe { std::env::remove_var("RANJID_PRECISION") };
+            assert!(result.is_err(), "non-UTF-8 value should return Err");
+            let msg = result.unwrap_err();
+            assert!(
+                msg.contains("UTF-8") || msg.contains("not valid"),
+                "error should mention UTF-8, got: {msg}"
+            );
+        }
+        #[cfg(not(unix))]
+        {
+            // Non-Unix platforms (e.g. Windows) cannot set a non-Unicode env
+            // var via the std API; skip gracefully.
+            let _ = OsStr::new(""); // suppress unused-import warning
+        }
     }
 }

@@ -607,6 +607,55 @@ mod tests {
         );
     }
 
+    /// Regression test for the old truncating-`as u64` cast bug.
+    ///
+    /// For nanosecond precision `from_millis_multiplier()` is `1_000_000`.
+    /// A timestamp of `(u64::MAX as u128 + 1) * 1_000_000` nanoseconds,
+    /// when divided by the millis multiplier, gives `u64::MAX + 1` — a
+    /// value that would **wrap to 0** under the old `as u64` cast, letting
+    /// the timestamp pass the `> MAX_TIMESTAMP_MS` guard silently. With
+    /// the correct u128 comparison the overflow is caught.
+    #[test]
+    fn check_heerid_convertibility_detects_timestamp_overflow_u64_wrap_regression() {
+        // ns millis multiplier = 1_000_000
+        let ns_millis_multiplier = RanjPrecision::Nanoseconds.from_millis_multiplier();
+        // (u64::MAX + 1) * 1_000_000 nanoseconds: dividing back gives u64::MAX+1 ms,
+        // which wraps to 0 under the old `as u64` cast.
+        let wrap_ts = (u64::MAX as u128 + 1) * ns_millis_multiplier;
+
+        // This timestamp exceeds RanjId's 89-bit field, so we cannot store it
+        // directly. Clamp to RanjId::MAX_TIMESTAMP — which itself exceeds
+        // HeerId::MAX_TIMESTAMP_MS by many orders of magnitude — to prove the
+        // guard fires at any sufficiently large value without overflow in the
+        // u128 comparison path.
+        let ts = wrap_ts.min(RanjId::MAX_TIMESTAMP);
+
+        let rid = RanjId::new(ts, RanjPrecision::Nanoseconds, 0, 0).unwrap();
+        let conflicts = RanjId::check_heerid_convertibility(&[rid]);
+        assert_eq!(conflicts.len(), 1, "expected exactly one conflict for over-range timestamp");
+        assert!(
+            matches!(conflicts[0].kind, ConflictKind::TimestampOverflow { .. }),
+            "expected TimestampOverflow, got {:?}",
+            conflicts[0].kind
+        );
+    }
+
+    /// Same regression but via `batch_to_heerids` — confirms the `Err` path.
+    #[test]
+    fn batch_to_heerids_returns_err_on_timestamp_overflow_u64_wrap_regression() {
+        let ns_millis_multiplier = RanjPrecision::Nanoseconds.from_millis_multiplier();
+        let wrap_ts = (u64::MAX as u128 + 1) * ns_millis_multiplier;
+        let ts = wrap_ts.min(RanjId::MAX_TIMESTAMP);
+
+        let rid = RanjId::new(ts, RanjPrecision::Nanoseconds, 0, 0).unwrap();
+        let result = RanjId::batch_to_heerids(&[rid]);
+        assert!(result.is_err(), "expected Err for over-range timestamp");
+        assert!(
+            matches!(result.unwrap_err(), ConversionError::TimestampOverflow { .. }),
+            "expected TimestampOverflow"
+        );
+    }
+
     // ── Roundtrip test ──
 
     #[test]
