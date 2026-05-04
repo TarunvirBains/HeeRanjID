@@ -24,7 +24,15 @@ BEGIN
         RAISE EXCEPTION 'requested_count must be greater than zero';
     END IF;
 
-    PERFORM set_heer_node_id(in_node_id);
+    IF in_node_id IS NULL OR in_node_id < 0 OR in_node_id > 511 THEN
+        RAISE EXCEPTION 'node_id % is out of range for HeerId (0..511)', in_node_id;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM heer_nodes WHERE node_id = in_node_id AND is_active = true
+    ) THEN
+        RAISE EXCEPTION 'node_id % is not registered as an active Heer node', in_node_id;
+    END IF;
 
     SELECT FLOOR(EXTRACT(EPOCH FROM c.epoch) * 1000)::BIGINT
     INTO epoch_ms
