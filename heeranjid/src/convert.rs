@@ -87,17 +87,24 @@ impl RanjId {
 
         for &rid in ids {
             let parts = rid.into_parts();
-            let timestamp_ms = (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
+            let timestamp_ms_u128 = parts.timestamp / parts.precision.from_millis_multiplier();
 
             if parts.node_id > HeerId::MAX_NODE_ID {
                 node_overflow.entry(parts.node_id).or_default().push(rid);
                 continue;
             }
 
-            if timestamp_ms > HeerId::MAX_TIMESTAMP_MS {
-                ts_overflow.entry(timestamp_ms).or_default().push(rid);
+            if timestamp_ms_u128 > u128::from(HeerId::MAX_TIMESTAMP_MS) {
+                // Cast to u64 only for the HashMap key — the overflow has already been
+                // detected above, so truncation here does not affect correctness.
+                ts_overflow
+                    .entry(timestamp_ms_u128 as u64)
+                    .or_default()
+                    .push(rid);
                 continue;
             }
+
+            let timestamp_ms = timestamp_ms_u128 as u64;
 
             groups
                 .entry((timestamp_ms, parts.node_id))
@@ -176,7 +183,7 @@ impl RanjId {
 
         for &rid in ids {
             let parts = rid.into_parts();
-            let timestamp_ms = (parts.timestamp / parts.precision.from_millis_multiplier()) as u64;
+            let timestamp_ms_u128 = parts.timestamp / parts.precision.from_millis_multiplier();
 
             if parts.node_id > HeerId::MAX_NODE_ID {
                 return Err(ConversionError::NodeIdOverflow {
@@ -185,12 +192,14 @@ impl RanjId {
                 });
             }
 
-            if timestamp_ms > HeerId::MAX_TIMESTAMP_MS {
+            if timestamp_ms_u128 > u128::from(HeerId::MAX_TIMESTAMP_MS) {
                 return Err(ConversionError::TimestampOverflow {
-                    value: u128::from(timestamp_ms),
+                    value: timestamp_ms_u128,
                     max: HeerId::MAX_TIMESTAMP_MS,
                 });
             }
+
+            let timestamp_ms = timestamp_ms_u128 as u64;
 
             groups
                 .entry((timestamp_ms, parts.node_id))
@@ -550,6 +559,52 @@ mod tests {
             conflicts[0].kind,
             ConflictKind::SequenceOverflow { count: 8193, .. }
         ));
+    }
+
+    // ── Timestamp overflow guard (u128 cast regression) ──
+
+    /// Femtosecond precision: `from_millis_multiplier()` = 1_000_000_000_000.
+    /// A timestamp of `(MAX_TIMESTAMP_MS + 1) * 1_000_000_000_000` fs would
+    /// wrap to a small value when cast to u64 before the comparison — the bug
+    /// that this fix addresses. Confirm the guard fires correctly.
+    #[test]
+    fn check_heerid_convertibility_detects_timestamp_overflow_femtosecond() {
+        // Femtosecond multiplier is 1_000_000_000_000 (1e12).
+        // Choose a timestamp whose ms value (after integer division) is exactly
+        // MAX_TIMESTAMP_MS + 1, which would have wrapped to 0 under the old cast.
+        let fs_multiplier = RanjPrecision::Femtoseconds.from_millis_multiplier();
+        let overflow_ts = (u128::from(HeerId::MAX_TIMESTAMP_MS) + 1) * fs_multiplier;
+
+        // Verify overflow_ts fits in RanjId's 89-bit timestamp field.
+        assert!(
+            overflow_ts <= RanjId::MAX_TIMESTAMP,
+            "overflow_ts must fit in RanjId"
+        );
+
+        let rid = RanjId::new(overflow_ts, RanjPrecision::Femtoseconds, 0, 0).unwrap();
+        let conflicts = RanjId::check_heerid_convertibility(&[rid]);
+        assert_eq!(conflicts.len(), 1, "expected exactly one conflict");
+        assert!(
+            matches!(conflicts[0].kind, ConflictKind::TimestampOverflow { .. }),
+            "expected TimestampOverflow, got {:?}",
+            conflicts[0].kind
+        );
+    }
+
+    #[test]
+    fn batch_to_heerids_returns_err_on_timestamp_overflow_femtosecond() {
+        let fs_multiplier = RanjPrecision::Femtoseconds.from_millis_multiplier();
+        let overflow_ts = (u128::from(HeerId::MAX_TIMESTAMP_MS) + 1) * fs_multiplier;
+
+        assert!(overflow_ts <= RanjId::MAX_TIMESTAMP);
+
+        let rid = RanjId::new(overflow_ts, RanjPrecision::Femtoseconds, 0, 0).unwrap();
+        let result = RanjId::batch_to_heerids(&[rid]);
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ConversionError::TimestampOverflow { .. }),
+            "expected TimestampOverflow"
+        );
     }
 
     // ── Roundtrip test ──
