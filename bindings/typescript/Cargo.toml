@@ -10,8 +10,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 heeranjid = { path = "../../heeranjid", default-features = false }
-napi = { version = "2", features = ["napi9"] }
-napi-derive = "2"
+napi = { version = "3", features = ["napi9"] }
+napi-derive = "3"
 uuid = "1"
 
 [build-dependencies]
