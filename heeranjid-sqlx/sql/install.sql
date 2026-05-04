@@ -1,5 +1,5 @@
-\i postgres/schema.sql
-\i postgres/functions/session.sql
-\i postgres/functions/generate_heerid.sql
-\i postgres/functions/generate_ranjid.sql
-\i postgres/functions/configure.sql
+\i schema.sql
+\i functions/session.sql
+\i functions/generate_heerid.sql
+\i functions/generate_ranjid.sql
+\i functions/configure.sql
