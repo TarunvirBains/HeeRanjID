@@ -102,6 +102,14 @@ pub const INSTALL_SQL: &str = concat!(
     include_str!("../sql/functions/generate_ranjid.sql"),
 );
 
+/// `heer_configure()` stored procedure — reads `heer_config`, validates
+/// the epoch/precision settings, regenerates `generate_ids` and
+/// `generate_ranjids` with baked-in constants, resets node state, and
+/// runs a smoke test. Call this after seeding `heer_config` to activate
+/// the configured generation path.
+pub const CONFIGURE_SQL: &str =
+    include_str!("../../sql/postgres/functions/configure.sql");
+
 /// Seed SQL — inserts the default node row (node_id = 1).
 pub const SEED_SQL: &str = include_str!("../sql/seed.sql");
 
@@ -129,6 +137,20 @@ where
     C: GenericClient + ?Sized,
 {
     client.batch_execute(INSTALL_SQL).await
+}
+
+/// Runs [`CONFIGURE_SQL`] (`heer_configure()`) via `client.batch_execute`.
+///
+/// Call this after seeding `heer_config` to activate the configured ID
+/// generation path. `heer_configure()` reads the `heer_config` row,
+/// validates the epoch and precision settings, regenerates
+/// `generate_ids` / `generate_ranjids` with baked-in constants, resets
+/// node state, and runs a smoke test.
+pub async fn install_configure<C>(client: &C) -> Result<(), tokio_postgres::Error>
+where
+    C: GenericClient + ?Sized,
+{
+    client.batch_execute(CONFIGURE_SQL).await
 }
 
 /// Seed the default node row (node_id = 1).

@@ -29,6 +29,7 @@ pub const INSTALL_SQL: &str = concat!(
     "\n",
     include_str!("../sql/functions/generate_ranjid.sql"),
 );
+pub const CONFIGURE_SQL: &str = include_str!("../sql/functions/configure.sql");
 pub const FETCH_NODE_SQL: &str = include_str!("../sql/queries/fetch_node.sql");
 pub const FETCH_EPOCH_SQL: &str = include_str!("../sql/queries/fetch_epoch.sql");
 pub const SEED_SQL: &str = include_str!("../sql/seed.sql");
@@ -63,6 +64,14 @@ where
     E: Executor<'e, Database = sqlx::Postgres>,
 {
     sqlx::raw_sql(INSTALL_SQL).execute(executor).await?;
+    Ok(())
+}
+
+pub async fn install_configure<'e, E>(executor: E) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::raw_sql(CONFIGURE_SQL).execute(executor).await?;
     Ok(())
 }
 
