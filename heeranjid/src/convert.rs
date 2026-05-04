@@ -602,7 +602,10 @@ mod tests {
         let result = RanjId::batch_to_heerids(&[rid]);
         assert!(result.is_err());
         assert!(
-            matches!(result.unwrap_err(), ConversionError::TimestampOverflow { .. }),
+            matches!(
+                result.unwrap_err(),
+                ConversionError::TimestampOverflow { .. }
+            ),
             "expected TimestampOverflow"
         );
     }
@@ -632,7 +635,11 @@ mod tests {
 
         let rid = RanjId::new(ts, RanjPrecision::Nanoseconds, 0, 0).unwrap();
         let conflicts = RanjId::check_heerid_convertibility(&[rid]);
-        assert_eq!(conflicts.len(), 1, "expected exactly one conflict for over-range timestamp");
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "expected exactly one conflict for over-range timestamp"
+        );
         assert!(
             matches!(conflicts[0].kind, ConflictKind::TimestampOverflow { .. }),
             "expected TimestampOverflow, got {:?}",
@@ -651,7 +658,10 @@ mod tests {
         let result = RanjId::batch_to_heerids(&[rid]);
         assert!(result.is_err(), "expected Err for over-range timestamp");
         assert!(
-            matches!(result.unwrap_err(), ConversionError::TimestampOverflow { .. }),
+            matches!(
+                result.unwrap_err(),
+                ConversionError::TimestampOverflow { .. }
+            ),
             "expected TimestampOverflow"
         );
     }

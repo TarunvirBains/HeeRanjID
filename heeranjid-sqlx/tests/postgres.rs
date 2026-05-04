@@ -1218,16 +1218,12 @@ async fn install_configure_and_call_heer_configure() {
     )
     .await
     .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
+    conn.execute(r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
 
     // Install the heer_configure() stored procedure.
     install_configure(&mut conn)
@@ -1307,11 +1303,12 @@ async fn decoded_ranjid_timestamp_is_current() {
     // The RanjId tick counts microseconds since the configured epoch
     // (CURRENT_TIMESTAMP - 1 day).  Convert to Unix microseconds by adding
     // the epoch offset.
-    let epoch_micros: i64 =
-        sqlx::query_scalar("SELECT FLOOR(EXTRACT(EPOCH FROM epoch) * 1000000)::BIGINT FROM heer_config WHERE id = 1")
-            .fetch_one(&mut conn)
-            .await
-            .unwrap();
+    let epoch_micros: i64 = sqlx::query_scalar(
+        "SELECT FLOOR(EXTRACT(EPOCH FROM epoch) * 1000000)::BIGINT FROM heer_config WHERE id = 1",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
     let epoch_micros = epoch_micros as u128;
 
     let decoded_unix_micros = epoch_micros + ranj.timestamp_micros();
@@ -1371,16 +1368,12 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
     )
     .await
     .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
+    conn.execute(r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
 
     // Activate the configured path.
     install_configure(&mut conn)
@@ -1467,16 +1460,12 @@ async fn heer_configure_upgrade_drops_old_overload() {
     )
     .await
     .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
-    )
-    .await
-    .unwrap();
+    conn.execute(r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
+    conn.execute(r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#)
+        .await
+        .unwrap();
 
     // Step 2: Create the old zero-arg overload that would exist in a pre-upgrade schema.
     conn.execute(

@@ -926,17 +926,11 @@ async fn install_configure_and_call_heer_configure() {
         .await
         .expect("insert heer_nodes");
     client
-        .execute(
-            "INSERT INTO heer_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_node_state");
     client
-        .execute(
-            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_ranj_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_ranj_node_state");
 
@@ -1016,17 +1010,11 @@ async fn decoded_ranjid_timestamp_is_current() {
         .await
         .expect("insert heer_nodes");
     client
-        .execute(
-            "INSERT INTO heer_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_node_state");
     client
-        .execute(
-            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_ranj_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_ranj_node_state");
 
@@ -1048,8 +1036,7 @@ async fn decoded_ranjid_timestamp_is_current() {
         .expect("system time is after epoch")
         .as_micros();
 
-    let ranj = heeranjid::RanjId::from_uuid(uuid)
-        .expect("database returned a valid RanjId UUID");
+    let ranj = heeranjid::RanjId::from_uuid(uuid).expect("database returned a valid RanjId UUID");
 
     // The RanjId tick counts microseconds since the configured epoch
     // (CURRENT_TIMESTAMP - 1 day).  Convert to Unix microseconds by adding
@@ -1142,17 +1129,11 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
         .await
         .expect("insert heer_nodes");
     client
-        .execute(
-            "INSERT INTO heer_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_node_state");
     client
-        .execute(
-            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_ranj_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_ranj_node_state");
 
@@ -1262,17 +1243,11 @@ async fn heer_configure_upgrade_drops_old_overload() {
         .await
         .expect("insert heer_nodes");
     client
-        .execute(
-            "INSERT INTO heer_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_node_state");
     client
-        .execute(
-            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
-            &[],
-        )
+        .execute("INSERT INTO heer_ranj_node_state (node_id) VALUES (1)", &[])
         .await
         .expect("insert heer_ranj_node_state");
 
