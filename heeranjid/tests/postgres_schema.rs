@@ -907,12 +907,8 @@ async fn install_configure_and_call_heer_configure() {
         .await
         .expect("install_schema");
 
-    // Default node — required for the smoke test inside heer_configure().
-    heeranjid::postgres_schema::seed_default_node(&client)
-        .await
-        .expect("seed_default_node");
-
-    // Epoch row — required for heer_configure() to read config.
+    // Manual seed — avoids the ON CONFLICT DO NOTHING in seed_default_node()
+    // conflicting with the precision-specific epoch row inserted below.
     client
         .execute(
             "INSERT INTO heer_config (id, epoch, precision) \
@@ -921,6 +917,28 @@ async fn install_configure_and_call_heer_configure() {
         )
         .await
         .expect("insert heer_config");
+    client
+        .execute(
+            "INSERT INTO heer_nodes (node_id, name, description, is_active) \
+             VALUES (1, 'default', 'Default single-node instance', true)",
+            &[],
+        )
+        .await
+        .expect("insert heer_nodes");
+    client
+        .execute(
+            "INSERT INTO heer_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_node_state");
+    client
+        .execute(
+            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_ranj_node_state");
 
     // Install the heer_configure() stored procedure.
     heeranjid::postgres_schema::install_configure(&client)
@@ -977,12 +995,10 @@ async fn decoded_ranjid_timestamp_is_current() {
     heeranjid::postgres_schema::install_schema(&client)
         .await
         .expect("install_schema");
-    heeranjid::postgres_schema::seed_default_node(&client)
-        .await
-        .expect("seed_default_node");
 
-    // Use precision = 'us' so that timestamp_micros() returns microseconds
-    // directly (divisor = 1).  Epoch is 1 day ago so the tick count > 0.
+    // Manual seed — precision 'us' is required for the timestamp decode check;
+    // seed_default_node() inserts 'ns' and ON CONFLICT DO NOTHING would silently
+    // leave the wrong precision, or a plain INSERT would fail with a duplicate key.
     client
         .execute(
             "INSERT INTO heer_config (id, epoch, precision) \
@@ -991,6 +1007,28 @@ async fn decoded_ranjid_timestamp_is_current() {
         )
         .await
         .expect("insert heer_config");
+    client
+        .execute(
+            "INSERT INTO heer_nodes (node_id, name, description, is_active) \
+             VALUES (1, 'default', 'Default single-node instance', true)",
+            &[],
+        )
+        .await
+        .expect("insert heer_nodes");
+    client
+        .execute(
+            "INSERT INTO heer_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_node_state");
+    client
+        .execute(
+            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_ranj_node_state");
 
     // Capture wall time just before generation so we can bound the timestamp.
     let before_micros = std::time::SystemTime::now()
@@ -1084,10 +1122,9 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
     heeranjid::postgres_schema::install_schema(&client)
         .await
         .expect("install_schema");
-    heeranjid::postgres_schema::seed_default_node(&client)
-        .await
-        .expect("seed_default_node");
 
+    // Manual seed — avoids the ON CONFLICT DO NOTHING in seed_default_node()
+    // conflicting with the precision-specific epoch row inserted below.
     client
         .execute(
             "INSERT INTO heer_config (id, epoch, precision) \
@@ -1096,6 +1133,28 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
         )
         .await
         .expect("insert heer_config");
+    client
+        .execute(
+            "INSERT INTO heer_nodes (node_id, name, description, is_active) \
+             VALUES (1, 'default', 'Default single-node instance', true)",
+            &[],
+        )
+        .await
+        .expect("insert heer_nodes");
+    client
+        .execute(
+            "INSERT INTO heer_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_node_state");
+    client
+        .execute(
+            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_ranj_node_state");
 
     // Activate the configured path.
     heeranjid::postgres_schema::install_configure(&client)
@@ -1139,4 +1198,114 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
         .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
         .await
         .expect("drop test schema (configured_rollback)");
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade identity hazard: old zero-arg overload is dropped by install_configure
+// ---------------------------------------------------------------------------
+//
+// When upgrading from a schema that has an old zero-arg `heer_configure()`
+// (pre-BOOLEAN-parameter version), `install_configure()` must drop that overload
+// before creating the new one.  Without the DROP FUNCTION IF EXISTS line in
+// configure.sql, the old overload would shadow or conflict with the new one.
+//
+// Steps:
+//   1. Fresh schema + install_schema() + manual seed.
+//   2. Create the old zero-arg overload manually (raises an exception if called).
+//   3. Call install_configure() — the DROP FUNCTION IF EXISTS heer_configure()
+//      line in configure.sql must remove the old overload first.
+//   4. Call SELECT heer_configure() — must succeed (new BOOLEAN overload with
+//      default), not raise 'old overload still present'.
+//   5. Call SELECT heer_configure(false) — must also succeed.
+
+#[tokio::test]
+async fn heer_configure_upgrade_drops_old_overload() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_configure_upgrade";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    // Step 1: Install base schema.
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+
+    // Manual seed.
+    client
+        .execute(
+            "INSERT INTO heer_config (id, epoch, precision) \
+             VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')",
+            &[],
+        )
+        .await
+        .expect("insert heer_config");
+    client
+        .execute(
+            "INSERT INTO heer_nodes (node_id, name, description, is_active) \
+             VALUES (1, 'default', 'Default single-node instance', true)",
+            &[],
+        )
+        .await
+        .expect("insert heer_nodes");
+    client
+        .execute(
+            "INSERT INTO heer_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_node_state");
+    client
+        .execute(
+            "INSERT INTO heer_ranj_node_state (node_id) VALUES (1)",
+            &[],
+        )
+        .await
+        .expect("insert heer_ranj_node_state");
+
+    // Step 2: Create the old zero-arg overload that would exist in a pre-upgrade schema.
+    client
+        .batch_execute(
+            "CREATE FUNCTION heer_configure() RETURNS VOID LANGUAGE plpgsql AS $$ \
+             BEGIN RAISE EXCEPTION 'old overload still present'; END; $$",
+        )
+        .await
+        .expect("create old zero-arg heer_configure overload");
+
+    // Step 3: install_configure() must DROP the old overload before creating the new one.
+    heeranjid::postgres_schema::install_configure(&client)
+        .await
+        .expect("install_configure should succeed and drop the old overload");
+
+    // Step 4: Calling heer_configure() (zero args, resolved via default) must invoke
+    // the new BOOLEAN overload, not raise 'old overload still present'.
+    client
+        .execute("SELECT heer_configure()", &[])
+        .await
+        .expect("heer_configure() must call the new overload, not the old zero-arg one");
+
+    // Step 5: Explicit-false variant must also succeed.
+    client
+        .execute("SELECT heer_configure(false)", &[])
+        .await
+        .expect("heer_configure(false) should succeed");
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema (configure_upgrade)");
 }

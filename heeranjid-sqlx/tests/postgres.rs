@@ -1203,12 +1203,28 @@ async fn install_configure_and_call_heer_configure() {
         .unwrap();
 
     install_schema(&mut conn).await.unwrap();
-    seed_default_node(&mut conn).await.unwrap();
 
-    // Epoch row — required for heer_configure() to read config.
+    // Manual seed — avoids the ON CONFLICT DO NOTHING in seed_default_node()
+    // conflicting with the precision-specific epoch row inserted below.
     conn.execute(
         r#"INSERT INTO heer_config (id, epoch, precision)
            VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, description, is_active)
+           VALUES (1, 'default', 'Default single-node instance', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
     )
     .await
     .unwrap();
@@ -1340,11 +1356,28 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
         .unwrap();
 
     install_schema(&mut conn).await.unwrap();
-    seed_default_node(&mut conn).await.unwrap();
 
+    // Manual seed — avoids the ON CONFLICT DO NOTHING in seed_default_node()
+    // conflicting with the precision-specific epoch row inserted below.
     conn.execute(
         r#"INSERT INTO heer_config (id, epoch, precision)
            VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, description, is_active)
+           VALUES (1, 'default', 'Default single-node instance', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
     )
     .await
     .unwrap();
@@ -1383,4 +1416,89 @@ async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
             error
         ),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade identity hazard: old zero-arg overload is dropped by install_configure
+// ---------------------------------------------------------------------------
+//
+// When upgrading from a schema that has an old zero-arg `heer_configure()`
+// (pre-BOOLEAN-parameter version), `install_configure()` must drop that overload
+// before creating the new one.  Without the DROP FUNCTION IF EXISTS line in
+// configure.sql, the old overload would shadow or conflict with the new one.
+//
+// Steps:
+//   1. Fresh schema + install_schema() + manual seed.
+//   2. Create the old zero-arg overload manually (raises an exception if called).
+//   3. Call install_configure() — the DROP FUNCTION IF EXISTS heer_configure()
+//      line in configure.sql must remove the old overload first.
+//   4. Call SELECT heer_configure() — must succeed (new BOOLEAN overload with
+//      default), not raise 'old overload still present'.
+//   5. Call SELECT heer_configure(false) — must also succeed.
+
+#[tokio::test]
+async fn heer_configure_upgrade_drops_old_overload() {
+    let mut conn = match connect_test_db().await {
+        Some(conn) => conn,
+        None => return,
+    };
+
+    let schema = test_schema_name();
+    conn.execute(format!(r#"CREATE SCHEMA "{schema}""#).as_str())
+        .await
+        .unwrap();
+    conn.execute(format!(r#"SET search_path TO "{schema}""#).as_str())
+        .await
+        .unwrap();
+
+    // Step 1: Install base schema.
+    install_schema(&mut conn).await.unwrap();
+
+    // Manual seed.
+    conn.execute(
+        r#"INSERT INTO heer_config (id, epoch, precision)
+           VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_nodes (node_id, name, description, is_active)
+           VALUES (1, 'default', 'Default single-node instance', true)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_node_state (node_id) VALUES (1)"#,
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        r#"INSERT INTO heer_ranj_node_state (node_id) VALUES (1)"#,
+    )
+    .await
+    .unwrap();
+
+    // Step 2: Create the old zero-arg overload that would exist in a pre-upgrade schema.
+    conn.execute(
+        r#"CREATE FUNCTION heer_configure() RETURNS VOID LANGUAGE plpgsql AS $$
+           BEGIN RAISE EXCEPTION 'old overload still present'; END; $$"#,
+    )
+    .await
+    .expect("create old zero-arg heer_configure overload");
+
+    // Step 3: install_configure() must DROP the old overload before creating the new one.
+    install_configure(&mut conn)
+        .await
+        .expect("install_configure should succeed and drop the old overload");
+
+    // Step 4: Calling heer_configure() (zero args, resolved via default) must invoke
+    // the new BOOLEAN overload, not raise 'old overload still present'.
+    conn.execute("SELECT heer_configure()")
+        .await
+        .expect("heer_configure() must call the new overload, not the old zero-arg one");
+
+    // Step 5: Explicit-false variant must also succeed.
+    conn.execute("SELECT heer_configure(false)")
+        .await
+        .expect("heer_configure(false) should succeed");
 }
