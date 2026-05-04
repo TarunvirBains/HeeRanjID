@@ -16,10 +16,11 @@ CREATE TABLE IF NOT EXISTS heer_config (
 );
 
 COMMENT ON COLUMN heer_config.ranj_epoch_offset IS
-'Extra time units added to the RanjId timestamp to represent epochs beyond '
-'the range of TIMESTAMP (e.g. the Big Bang). The unit matches the RanjId '
-'precision — microseconds by default. When 0, the epoch TIMESTAMP is used '
-'directly. When set, current_tick = (now - epoch) + ranj_epoch_offset.';
+'Extra microseconds added to the RanjId timestamp to represent epochs beyond '
+'the range of TIMESTAMP (e.g. the Big Bang). The unit is always microseconds, '
+'regardless of the configured precision. This allows a consistent integer value '
+'to be used across precision changes. When 0, the epoch TIMESTAMP is used '
+'directly. When set, current_tick = (now - epoch) + FLOOR(ranj_epoch_offset * multiplier / 1000000).';
 
 CREATE TABLE IF NOT EXISTS heer_node_state (
     node_id         INTEGER PRIMARY KEY
