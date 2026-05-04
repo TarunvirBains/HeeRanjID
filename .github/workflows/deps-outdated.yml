@@ -1,0 +1,92 @@
+name: Dependency freshness
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # Mondays 09:00 UTC
+  workflow_dispatch:        # allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  outdated:
+    name: cargo outdated
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1.94-slim-bookworm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated --quiet
+
+      - name: Run cargo outdated
+        id: outdated
+        run: |
+          OUTPUT=$(cargo outdated --workspace --depth 1 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "All dependencies are up to date"; then
+            echo "has_outdated=false" >> "$GITHUB_OUTPUT"
+          else
+            # Escape for multiline GitHub output
+            ESCAPED="${OUTPUT//'%'/'%25'}"
+            ESCAPED="${ESCAPED//$'\n'/'%0A'}"
+            ESCAPED="${ESCAPED//$'\r'/'%0D'}"
+            echo "has_outdated=true" >> "$GITHUB_OUTPUT"
+            echo "report<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$OUTPUT" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Close existing outdated-deps issue if clean
+        if: steps.outdated.outputs.has_outdated == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --label "dependencies" --state open \
+            --json number,title \
+            | jq -r '.[] | select(.title | startswith("Outdated dependencies")) | .number')
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" \
+              --repo "$GITHUB_REPOSITORY" \
+              --comment "All direct dependencies are now up to date — closing."
+          fi
+
+      - name: Create or update outdated-deps issue
+        if: steps.outdated.outputs.has_outdated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ steps.outdated.outputs.report }}
+        run: |
+          TITLE="Outdated dependencies ($(date +%Y-%m-%d))"
+          BODY="## Weekly dependency freshness report
+
+\`\`\`
+$REPORT
+\`\`\`
+
+Run \`cargo outdated --workspace --depth 1\` locally to see full details.
+Patch/minor bumps are usually safe; major bumps may require code changes."
+
+          # Close stale open issues first
+          gh issue list --repo "$GITHUB_REPOSITORY" \
+            --label "dependencies" --state open \
+            --json number --jq '.[].number' \
+            | xargs -r -I{} gh issue close {} \
+                --repo "$GITHUB_REPOSITORY" \
+                --comment "Superseded by a newer weekly report."
+
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --body "$BODY" \
+            --label "dependencies"
