@@ -871,3 +871,272 @@ async fn generate_ranjids_desc_returns_flipped_batch() {
         .await
         .expect("drop test schema");
 }
+
+// ---------------------------------------------------------------------------
+// install_configure / heer_configure() (issue #40)
+// ---------------------------------------------------------------------------
+//
+// Verifies that `install_configure()` installs the `heer_configure()` stored
+// procedure and that calling it succeeds end-to-end without error.  Requires a
+// live `heer_config` row so the smoke test inside `heer_configure()` can run
+// `generate_id(1)` / `generate_ranjid(1)`.
+
+#[tokio::test]
+async fn install_configure_and_call_heer_configure() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_configure";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    // Base schema + functions.
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+
+    // Default node — required for the smoke test inside heer_configure().
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+
+    // Epoch row — required for heer_configure() to read config.
+    client
+        .execute(
+            "INSERT INTO heer_config (id, epoch, precision) \
+             VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')",
+            &[],
+        )
+        .await
+        .expect("insert heer_config");
+
+    // Install the heer_configure() stored procedure.
+    heeranjid::postgres_schema::install_configure(&client)
+        .await
+        .expect("install_configure should succeed");
+
+    // Call heer_configure() — this validates config, regenerates generate_ids /
+    // generate_ranjids with baked-in constants, resets node state, and runs a
+    // smoke test.  Any error here indicates a bug in configure.sql.
+    client
+        .execute("SELECT heer_configure()", &[])
+        .await
+        .expect("heer_configure() should succeed without error");
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema (configure)");
+}
+
+// ---------------------------------------------------------------------------
+// Decoded RanjId timestamp (issue #40 / issue #33)
+// ---------------------------------------------------------------------------
+//
+// Generates a RanjId via the embedded SQL path (`generate_ranjid(1)`), then
+// decodes it with `RanjId::from_uuid()` / `RanjId::timestamp_micros()` and
+// asserts that the decoded timestamp is within 5 seconds of the current wall
+// clock.  Before the precision_bits fix in issue #33 the decoded timestamp was
+// 1000x too small (nanoseconds stored as microseconds), so this test would
+// have failed with a value close to `now / 1000`.
+
+#[tokio::test]
+async fn decoded_ranjid_timestamp_is_current() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_ranjid_ts";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+
+    // Use precision = 'us' so that timestamp_micros() returns microseconds
+    // directly (divisor = 1).  Epoch is 1 day ago so the tick count > 0.
+    client
+        .execute(
+            "INSERT INTO heer_config (id, epoch, precision) \
+             VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')",
+            &[],
+        )
+        .await
+        .expect("insert heer_config");
+
+    // Capture wall time just before generation so we can bound the timestamp.
+    let before_micros = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time is after epoch")
+        .as_micros();
+
+    // Generate via the embedded SQL path.
+    let uuid: uuid::Uuid = client
+        .query_one("SELECT generate_ranjid(1)", &[])
+        .await
+        .expect("generate_ranjid(1)")
+        .get(0);
+
+    let after_micros = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time is after epoch")
+        .as_micros();
+
+    let ranj = heeranjid::RanjId::from_uuid(uuid)
+        .expect("database returned a valid RanjId UUID");
+
+    // The RanjId tick counts microseconds since the configured epoch
+    // (CURRENT_TIMESTAMP - 1 day).  Convert to Unix microseconds by adding
+    // the epoch offset.
+    let epoch_micros: u128 = client
+        .query_one(
+            "SELECT FLOOR(EXTRACT(EPOCH FROM epoch) * 1000000)::BIGINT \
+             FROM heer_config WHERE id = 1",
+            &[],
+        )
+        .await
+        .expect("fetch epoch_micros")
+        .get::<_, i64>(0) as u128;
+
+    let decoded_unix_micros = epoch_micros + ranj.timestamp_micros();
+
+    const TOLERANCE_MICROS: u128 = 5_000_000; // 5 seconds
+    assert!(
+        decoded_unix_micros >= before_micros.saturating_sub(TOLERANCE_MICROS),
+        "decoded timestamp {} µs is more than 5 s before generation start {} µs",
+        decoded_unix_micros,
+        before_micros,
+    );
+    assert!(
+        decoded_unix_micros <= after_micros + TOLERANCE_MICROS,
+        "decoded timestamp {} µs is more than 5 s after generation end {} µs",
+        decoded_unix_micros,
+        after_micros,
+    );
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema (ranjid_ts)");
+}
+
+// ---------------------------------------------------------------------------
+// Configured-path rollback SQLSTATE (issue #40)
+// ---------------------------------------------------------------------------
+//
+// After `heer_configure()` activates the configured generation path, seeding
+// `last_id_time` far in the future must still surface the typed
+// `HardClockRollback` error.  This is the configured-path parallel of the
+// existing `generate_heerid_surfaces_typed_rollback` /
+// `generate_ranjid_surfaces_hard_clock_rollback` tests in
+// `postgres_generate.rs`.
+
+#[tokio::test]
+async fn configured_ranjid_path_surfaces_hard_clock_rollback() {
+    let Some(client) = connect().await else {
+        eprintln!("SKIP: DATABASE_URL not set; skipping live database test");
+        return;
+    };
+
+    let schema_name = "test_heeranjid_configured_rollback";
+    client
+        .execute(&format!("DROP SCHEMA IF EXISTS {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema");
+    client
+        .execute(&format!("CREATE SCHEMA {schema_name}"), &[])
+        .await
+        .expect("create test schema");
+    client
+        .execute(&format!("SET search_path TO {schema_name}"), &[])
+        .await
+        .expect("set search_path");
+
+    heeranjid::postgres_schema::install_schema(&client)
+        .await
+        .expect("install_schema");
+    heeranjid::postgres_schema::seed_default_node(&client)
+        .await
+        .expect("seed_default_node");
+
+    client
+        .execute(
+            "INSERT INTO heer_config (id, epoch, precision) \
+             VALUES (1, CURRENT_TIMESTAMP - INTERVAL '1 day', 'us')",
+            &[],
+        )
+        .await
+        .expect("insert heer_config");
+
+    // Activate the configured path.
+    heeranjid::postgres_schema::install_configure(&client)
+        .await
+        .expect("install_configure");
+    client
+        .execute("SELECT heer_configure()", &[])
+        .await
+        .expect("heer_configure() should succeed");
+
+    // Seed last_id_time far in the future (999 trillion ticks) to trigger hard
+    // clock rollback on the next generation call, regardless of execution latency.
+    client
+        .execute(
+            "INSERT INTO heer_ranj_node_state (node_id, last_id_time, last_sequence) \
+             VALUES (1, 999999999999999, 0) \
+             ON CONFLICT (node_id) DO UPDATE \
+             SET last_id_time = EXCLUDED.last_id_time, \
+                 last_sequence = EXCLUDED.last_sequence",
+            &[],
+        )
+        .await
+        .expect("seed heer_ranj_node_state with future timestamp");
+
+    // The typed generate helper must surface HardClockRollback.
+    let error = heeranjid::postgres_generate::generate_ranjid(&client, 1)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            heeranjid::postgres_generate::GenerateError::HardClockRollback { .. }
+        ),
+        "expected HardClockRollback on configured path, got {:?}",
+        error,
+    );
+
+    // Cleanup.
+    client
+        .execute(&format!("DROP SCHEMA {schema_name} CASCADE"), &[])
+        .await
+        .expect("drop test schema (configured_rollback)");
+}
