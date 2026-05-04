@@ -17,7 +17,12 @@ CREATE OR REPLACE FUNCTION heerid_to_asc(bits bigint) RETURNS bigint AS $$
     SELECT (bits # heerid_flip_mask())::bigint;
 $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION ranjid_to_desc(id uuid) RETURNS uuid AS $$
+DO $install$
+DECLARE
+    _sch text := COALESCE(current_schema(), 'public');
+BEGIN
+    EXECUTE format($sql$
+CREATE OR REPLACE FUNCTION ranjid_to_desc(id uuid) RETURNS uuid AS $func$
 DECLARE
     b    bytea := uuid_send(id);
     mask bytea := decode('FFFFFFFFFFFF0FFF0FFFFFFF8000FFFF', 'hex');
@@ -29,7 +34,10 @@ BEGIN
     END LOOP;
     RETURN encode(r, 'hex')::uuid;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+$func$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = %I, pg_catalog;
+    $sql$, _sch);
+END;
+$install$;
 
 CREATE OR REPLACE FUNCTION ranjid_to_asc(id uuid) RETURNS uuid AS $$
     SELECT ranjid_to_desc(id);
