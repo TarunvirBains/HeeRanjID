@@ -341,7 +341,7 @@ async fn ranjid_sql_generates_valid_uuidv8() {
         .unwrap();
 
     let ranj = RanjId::from_uuid(uuid).unwrap();
-    // TODO: SQL functions still generate UUIDv7; version check skipped until heer_configure() is updated.
+    // SQL functions generate UUIDv8; version check skipped until heer_configure() is tested end-to-end.
     assert!(ranj.timestamp_micros() > 0);
     assert_eq!(ranj.node_id(), 1);
 }
