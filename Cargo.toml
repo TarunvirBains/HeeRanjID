@@ -1,5 +1,5 @@
 [workspace]
-members = ["heeranjid", "heeranjid-sqlx", "bindings/python", "bindings/typescript", "heeranjid-ffi"]
+members = ["heeranjid", "heeranjid-sqlx", "bindings/python", "bindings/typescript", "heeranjid-ffi", "xtask"]
 resolver = "2"
 
 [workspace.package]

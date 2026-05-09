@@ -72,6 +72,9 @@ jobs:
       - name: cargo deny check
         run: cargo deny check
 
+      - name: cargo xtask check-test-surface
+        run: cargo xtask check-test-surface
+
       # Test
       - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
@@ -175,6 +178,9 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --workspace --exclude heeranjid-python --exclude heeranjid-node -- -D warnings
+
+      - name: cargo xtask check-test-surface
+        run: cargo xtask check-test-surface
 
       - name: cargo test (unit)
         run: cargo test -p heeranjid --lib
@@ -312,7 +318,7 @@ jobs:
         run: pytest bindings/python/django/tests/test_mixin_comparison.py -v -k "not TestDbCreation"
 
       - name: Run Postgres integration tests
-        run: pytest bindings/python/django/tests/test_postgres_integration.py -v
+        run: pytest bindings/python/django/tests/test_postgres_integration.py bindings/python/django/tests/test_django_orm.py -v
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/heeranjid
 
