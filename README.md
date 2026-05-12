@@ -140,6 +140,13 @@ Start here:
 - [`docs/generation/database-generation.md`](./docs/generation/database-generation.md)
 - [`docs/PUBLISHING.md`](./docs/PUBLISHING.md)
 
+## License
+
+Dual-licensed under
+[MIT](./LICENSE-MIT)
+or
+[Apache-2.0](./LICENSE-APACHE).
+
 ## Release Notes
 
 The main remaining release tasks are:

@@ -68,14 +68,7 @@ jobs:
           REPORT: ${{ steps.outdated.outputs.report }}
         run: |
           TITLE="Outdated dependencies ($(date +%Y-%m-%d))"
-          BODY="## Weekly dependency freshness report
-
-\`\`\`
-$REPORT
-\`\`\`
-
-Run \`cargo outdated --workspace --depth 1\` locally to see full details.
-Patch/minor bumps are usually safe; major bumps may require code changes."
+          BODY="$(printf '## Weekly dependency freshness report\n\n```\n%s\n```\n\nRun `cargo outdated --workspace --depth 1` locally to see full details.\nPatch/minor bumps are usually safe; major bumps may require code changes.' "$REPORT")"
 
           # Close stale open issues first
           gh issue list --repo "$GITHUB_REPOSITORY" \
