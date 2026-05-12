@@ -55,7 +55,6 @@ jobs:
       - name: Install build tools
         run: |
           pip install maturin --break-system-packages
-          npm install -g @napi-rs/cli
 
       - name: Cache cargo registry & build
         uses: actions/cache@v4
@@ -111,7 +110,10 @@ jobs:
           PYO3_PYTHON: python3
 
       - name: Build TypeScript native module
-        run: cd bindings/typescript && npm install && npx --yes @napi-rs/cli@3.6.2 napi build --platform --release
+        run: |
+          cd bindings/typescript
+          npm install
+          npm exec --yes --package @napi-rs/cli@3.6.2 -- napi build --platform --release
 
       - name: Build FFI shared library
         run: |
