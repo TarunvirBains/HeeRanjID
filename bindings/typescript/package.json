@@ -18,16 +18,10 @@
     "postpack": "rm -rf ./sql",
     "test": "vitest run"
   },
-  "files": [
-    "dist/",
-    "js/",
-    "sql/",
-    "index.js",
-    "index.d.ts"
-  ],
+  "files": ["dist/", "js/", "sql/", "index.js", "index.d.ts"],
   "devDependencies": {
-    "@napi-rs/cli": "^3.6.2",
-    "typescript": "^5",
-    "vitest": "^2"
+    "@napi-rs/cli": "^2",
+    "vitest": "^2",
+    "typescript": "^5"
   }
 }
