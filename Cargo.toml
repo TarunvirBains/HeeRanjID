@@ -11,6 +11,7 @@ authors = ["Tarunvir Bains"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 thiserror = "2"
 uuid = { version = "1", features = ["serde"] }
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "uuid", "runtime-tokio-rustls", "macros", "time"] }

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::Error;
@@ -10,14 +10,8 @@ use crate::ranj::{RANJ_FLIP_MASK, RanjId};
 use crate::serde_helpers;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct RanjIdDesc(
-    #[serde(
-        serialize_with = "serde_helpers::serialize_display",
-        deserialize_with = "serde_helpers::deserialize_from_str_or_int"
-    )]
-    Uuid,
-);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct RanjIdDesc(Uuid);
 
 impl RanjIdDesc {
     /// Sentinel value (wire-zero on the descending-encoded side, i.e.
@@ -93,6 +87,24 @@ impl RanjIdDesc {
             .expect("desc→asc XOR preserves version and variant")
             .into_parts()
             .sequence
+    }
+}
+
+impl Serialize for RanjIdDesc {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_helpers::serialize_display_or_inner(self, &self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for RanjIdDesc {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_helpers::deserialize_from_str_or_int_or_inner(deserializer, Self::from_uuid)
     }
 }
 

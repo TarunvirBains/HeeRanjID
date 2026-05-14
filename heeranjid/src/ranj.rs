@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::precision::RanjPrecision;
 use crate::serde_helpers;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -30,14 +30,8 @@ pub struct RanjIdParts {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct RanjId(
-    #[serde(
-        serialize_with = "serde_helpers::serialize_display",
-        deserialize_with = "serde_helpers::deserialize_from_str_or_int"
-    )]
-    Uuid,
-);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RanjId(Uuid);
 
 impl RanjId {
     pub const MAX_TIMESTAMP: u128 = RANJ_TIMESTAMP_MASK;
@@ -158,6 +152,24 @@ impl RanjId {
 
     pub fn sequence(self) -> u16 {
         self.into_parts().sequence
+    }
+}
+
+impl Serialize for RanjId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_helpers::serialize_display_or_inner(self, &self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for RanjId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_helpers::deserialize_from_str_or_int_or_inner(deserializer, Self::from_uuid)
     }
 }
 
