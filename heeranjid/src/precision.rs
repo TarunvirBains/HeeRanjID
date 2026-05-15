@@ -65,7 +65,7 @@ static GENERATION_PRECISION: OnceLock<RanjPrecision> = OnceLock::new();
 /// # Example
 ///
 /// ```rust
-/// use heeranjid::precision::try_generation_precision;
+/// use heeranjid::try_generation_precision;
 ///
 /// fn main() {
 ///     let precision = try_generation_precision()

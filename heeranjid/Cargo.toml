@@ -27,6 +27,7 @@ tokio-postgres = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true
+postcard.workspace = true
 sqlx.workspace = true
 tokio-postgres.workspace = true
 tokio.workspace = true

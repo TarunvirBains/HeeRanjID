@@ -149,6 +149,17 @@ or
 
 ## Release Notes
 
+### v0.4.0
+
+- `HeerId` and `HeerIdDesc` now serialize through human-readable serde formats
+  such as JSON as their `Display` decimal strings. Deserialization remains
+  compatible with both JSON strings and JSON integers.
+- Non-human-readable serde formats such as postcard now use the inner primitive
+  wire shape directly (`i64` for Heer IDs, `Uuid` for Ranj IDs) and revalidate
+  through the public constructors on decode.
+- `RanjId` and `RanjIdDesc` keep their JSON UUID-string shape; JSON integer
+  input is rejected.
+
 The main remaining release tasks are:
 
 - finalizing `crates.io` metadata for all Rust crates

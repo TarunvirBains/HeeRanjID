@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::serde_helpers;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 
@@ -24,15 +24,19 @@ pub struct HeerIdParts {
     pub sequence: u16,
 }
 
+/// 64-bit time-ordered identifier with ascending raw-bit order.
+///
+/// # Wire shape
+///
+/// - Human-readable serde (e.g. `serde_json`) emits the `Display`
+///   decimal string and accepts either a JSON string parsed via
+///   [`FromStr`] or a JSON integer routed through [`HeerId::from_i64`].
+/// - Non-human-readable serde (e.g. `postcard`, `bincode`) encodes the
+///   inner `i64` directly and revalidates it through
+///   [`HeerId::from_i64`] on decode.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct HeerId(
-    #[serde(
-        serialize_with = "serde_helpers::serialize_display",
-        deserialize_with = "serde_helpers::deserialize_from_str_or_int"
-    )]
-    i64,
-);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HeerId(i64);
 
 impl HeerId {
     pub const MAX_TIMESTAMP_MS: u64 = HEER_TIMESTAMP_MASK;
@@ -122,6 +126,24 @@ impl HeerId {
 
     pub fn sequence(self) -> u16 {
         self.into_parts().sequence
+    }
+}
+
+impl Serialize for HeerId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_helpers::serialize_display_or_inner(self, &self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for HeerId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_helpers::deserialize_i64_wrapper(deserializer, Self::from_i64)
     }
 }
 

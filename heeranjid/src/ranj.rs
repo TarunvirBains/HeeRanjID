@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::precision::RanjPrecision;
 use crate::serde_helpers;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -29,15 +29,20 @@ pub struct RanjIdParts {
     pub sequence: u16,
 }
 
+/// 128-bit UUIDv8 time-ordered identifier with ascending raw-bit order.
+///
+/// # Wire shape
+///
+/// - Human-readable serde (e.g. `serde_json`) emits the `Display` form
+///   (canonical UUID string) and accepts a JSON string parsed via
+///   [`FromStr`]; JSON integers are rejected because UUIDs are not
+///   integers.
+/// - Non-human-readable serde (e.g. `postcard`, `bincode`) encodes the
+///   inner [`Uuid`] directly and revalidates it through
+///   [`RanjId::from_uuid`] on decode.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct RanjId(
-    #[serde(
-        serialize_with = "serde_helpers::serialize_display",
-        deserialize_with = "serde_helpers::deserialize_from_str_or_int"
-    )]
-    Uuid,
-);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RanjId(Uuid);
 
 impl RanjId {
     pub const MAX_TIMESTAMP: u128 = RANJ_TIMESTAMP_MASK;
@@ -158,6 +163,24 @@ impl RanjId {
 
     pub fn sequence(self) -> u16 {
         self.into_parts().sequence
+    }
+}
+
+impl Serialize for RanjId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_helpers::serialize_display_or_inner(self, &self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for RanjId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_helpers::deserialize_uuid_wrapper(deserializer, Self::from_uuid)
     }
 }
 

@@ -1,21 +1,27 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::Error;
 use crate::heer::{HEER_FLIP_MASK, HeerId};
 use crate::serde_helpers;
 
+/// 64-bit time-ordered identifier with descending raw-bit order; the
+/// reverse-chronologically-sorted sibling of [`HeerId`].
+///
+/// # Wire shape
+///
+/// - Human-readable serde (e.g. `serde_json`) emits the `Display`
+///   decimal string of the stored desc-encoded `i64` and accepts either
+///   a JSON string (via [`FromStr`]) or a JSON integer (via
+///   [`HeerIdDesc::from_i64`]).
+/// - Non-human-readable serde (e.g. `postcard`, `bincode`) encodes the
+///   inner `i64` directly and revalidates it through
+///   [`HeerIdDesc::from_i64`] on decode.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct HeerIdDesc(
-    #[serde(
-        serialize_with = "serde_helpers::serialize_display",
-        deserialize_with = "serde_helpers::deserialize_from_str_or_int"
-    )]
-    i64,
-);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct HeerIdDesc(i64);
 
 impl HeerIdDesc {
     /// Sentinel value (wire-zero) for use as a placeholder desc ID before
@@ -72,6 +78,24 @@ impl HeerIdDesc {
             .expect("desc→asc XOR preserves bit-63 = 0")
             .into_parts()
             .sequence
+    }
+}
+
+impl Serialize for HeerIdDesc {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_helpers::serialize_display_or_inner(self, &self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for HeerIdDesc {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_helpers::deserialize_i64_wrapper(deserializer, Self::from_i64)
     }
 }
 

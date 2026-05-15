@@ -6,11 +6,9 @@
 //! `sqlcmd`. The module has no runtime MSSQL dependency and is
 //! feature-gated behind `mssql_schema` (off by default).
 //!
-//! Mirrors the surface of [`postgres_schema`] for the asc↔desc
+//! Mirrors the surface of `postgres_schema` for the asc↔desc
 //! migration workflow. See `docs/migrations/asc-to-desc-mssql.md` for
 //! the operator playbook.
-//!
-//! [`postgres_schema`]: crate::postgres_schema
 
 use crate::schema_shared::{ColumnPair, IdKind, SharedSchemaError, validate_ident};
 

@@ -1,4 +1,4 @@
-//! Vendor-neutral primitives shared between [`postgres_schema`] and
+//! Vendor-neutral primitives shared between `postgres_schema` and
 //! [`mssql_schema`].
 //!
 //! These types and helpers do not depend on any database client crate,
@@ -6,7 +6,6 @@
 //! modules without forcing a caller to pull in `tokio-postgres` just to
 //! generate MSSQL T-SQL strings.
 //!
-//! [`postgres_schema`]: crate::postgres_schema
 //! [`mssql_schema`]: crate::mssql_schema
 
 /// Error returned by the per-table autofill helpers.

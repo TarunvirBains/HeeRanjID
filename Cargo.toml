@@ -3,7 +3,7 @@ members = ["heeranjid", "heeranjid-sqlx", "bindings/python", "bindings/typescrip
 resolver = "2"
 
 [workspace.package]
-version = "0.3.6"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/TarunvirBains/HeeRanjID"
@@ -11,6 +11,7 @@ authors = ["Tarunvir Bains"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 thiserror = "2"
 uuid = { version = "1", features = ["serde"] }
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "uuid", "runtime-tokio-rustls", "macros", "time"] }
