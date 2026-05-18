@@ -6,9 +6,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 documentation = "https://docs.rs/heeranjid"
-description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit UUIDv8) with configurable precision"
-keywords = ["distributed", "id", "uuid", "snowflake", "heerid"]
-categories = ["data-structures", "database"]
+description = "Rust Snowflake-style distributed ID generator: 64-bit sortable bigint IDs and UUIDv8-compatible 128-bit IDs for Postgres and MSSQL, with SQLx, Django, and cross-language ORM support."
+keywords = ["snowflake", "uuid", "id-generator", "postgres", "mssql"]
+categories = ["database", "data-structures", "algorithms"]
 readme = "README.md"
 
 [features]

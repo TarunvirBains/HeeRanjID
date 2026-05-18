@@ -4,17 +4,18 @@ build-backend = "maturin"
 
 [project]
 name = "heeranjid"
-version = "0.3.6"
-description = "Distributed ID generation — HeerId (64-bit) and RanjId (128-bit UUIDv8) with configurable precision"
+version = "0.5.0"
+description = "Python Snowflake-style distributed ID generator: 64-bit sortable bigint IDs and UUIDv8-compatible 128-bit IDs for Postgres and MSSQL, with Django and cross-language ORM support."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 authors = [
     { name = "Tarunvir Bains" },
 ]
-keywords = ["distributed", "id", "uuid", "snowflake", "heerid"]
+keywords = ["snowflake", "uuid", "id-generator", "postgres", "mssql", "django"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

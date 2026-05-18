@@ -79,6 +79,17 @@ In short: **BIGSERIAL paints you into a corner, UUIDv7 charges you 16 bytes fore
 - [`docs/`](./docs): format, design, and publishing documentation
 - [`sql/`](./sql): SQL assets used by the database-backed integrations
 
+For a detailed comparison against Snowflake, UUIDv7, ULID, auto-increment
+`BIGSERIAL`/`IDENTITY`, and random UUIDv4, see [docs/comparisons.md](./docs/comparisons.md).
+
+## Crates
+
+| Crate | Purpose |
+|---|---|
+| `heeranjid` | Core ID types, generators, and Postgres + MSSQL schema helpers |
+| `heeranjid-sqlx` | SQLx schema installer and server-side Postgres ID-generation helpers |
+| `heeranjid-ffi` | C FFI bindings (used by .NET and other C-FFI consumers) |
+
 ## Clone And Build
 
 This repository uses git submodules for SQL assets and helper scripts. Clone it
@@ -104,21 +115,54 @@ Without the `sql/` submodule, the SQLx crate and Python wheel build will fail.
 - TypeScript native module: builds locally
 - FFI shared library: builds locally
 
-Package-publishing polish is still in progress, mainly around metadata quality,
-package-specific READMEs, and release documentation.
+Package-publishing polish is still in progress, mainly around package-specific
+READMEs and release documentation.
 
-## Minimal Rust Example
+## Examples
 
+### Generating a `HeerId`
 ```rust
-use heeranjid::{HeerId, RanjId, RanjPrecision};
+use heeranjid::HeerId;
 
-let heer = HeerId::new(1_000, 7, 42)?;
-let ranj = RanjId::new(1_000_000, RanjPrecision::Microseconds, 7, 42)?;
-
+// Generate an ID for node 7, sequence 42
+let heer = HeerId::new(1_700_000_000_000, 7, 42)?;
 assert_eq!(heer.node_id(), 7);
+# Ok::<(), heeranjid::Error>(())
+```
+
+### Generating a `RanjId`
+```rust
+use heeranjid::{RanjId, RanjPrecision};
+
+// Generate a UUIDv8-compatible ID with microsecond precision
+let ranj = RanjId::new(1_700_000_000_000, RanjPrecision::Microseconds, 7, 42)?;
 assert_eq!(ranj.node_id(), 7);
 # Ok::<(), heeranjid::Error>(())
 ```
+
+### Storing `HeerId` as a Postgres `bigint` via SQLx
+If you enable the `sqlx` and `postgres` features, `HeerId` transparently binds to `bigint` columns.
+
+```rust,ignore
+use heeranjid::HeerId;
+use sqlx::postgres::PgPool;
+
+#[derive(sqlx::FromRow)]
+struct User {
+    id: HeerId, // Maps directly to a Postgres `bigint` primary key
+    name: String,
+}
+
+// ...
+let id = HeerId::new(timestamp, node_id, sequence)?;
+sqlx::query!("INSERT INTO users (id, name) VALUES ($1, $2)", id as _, "Alice")
+    .execute(&pool)
+    .await?;
+```
+
+For MSSQL, or for Django ORM-based projects (Postgres or MSSQL), use the
+`heeranjid-django` bindings package — see `bindings/python/django/README.md`
+for vendor-specific field types and migrations.
 
 ## Minimal Python Example
 
@@ -149,6 +193,22 @@ or
 
 ## Release Notes
 
+### v0.5.0
+
+- Crate metadata refresh for crates.io: clearer description naming Postgres + MSSQL,
+  SQLx, Django, and cross-language ORM support; updated keywords and categories
+  for better discoverability.
+- Crate-level rustdoc preamble now names MSSQL alongside Postgres and restores
+  intra-doc links for `HeerId` and `RanjId`.
+- README adds a Crates summary, links to `docs/comparisons.md`, and points Django /
+  MSSQL users to the `heeranjid-django` package.
+- New `docs/comparisons.md` walks HeeRanjID against Snowflake, UUIDv7, ULID,
+  auto-increment `BIGSERIAL`/`IDENTITY`, and random UUIDv4, with MSSQL coverage.
+- Fixed a stale doc claim in `heeranjid::mssql_schema` that referenced a
+  non-existent `mssql_schema` feature flag (the module is always compiled).
+
+No code, wire-format, or schema changes.
+
 ### v0.4.0
 
 - `HeerId` and `HeerIdDesc` now serialize through human-readable serde formats
@@ -162,7 +222,6 @@ or
 
 The main remaining release tasks are:
 
-- finalizing `crates.io` metadata for all Rust crates
 - improving package pages on PyPI
 - tightening public-facing docs and examples
 

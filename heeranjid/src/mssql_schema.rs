@@ -3,8 +3,9 @@
 //! These helpers generate T-SQL strings; they do not execute them.
 //! Callers run the returned SQL through their own MSSQL client —
 //! `pyodbc` from Python, `tiberius` from Rust, or a deploy script via
-//! `sqlcmd`. The module has no runtime MSSQL dependency and is
-//! feature-gated behind `mssql_schema` (off by default).
+//! `sqlcmd`. The module has no runtime MSSQL dependency and emits
+//! only static T-SQL strings; it is always compiled and carries no
+//! optional feature flag.
 //!
 //! Mirrors the surface of `postgres_schema` for the asc↔desc
 //! migration workflow. See `docs/migrations/asc-to-desc-mssql.md` for

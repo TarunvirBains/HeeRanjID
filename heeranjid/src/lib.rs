@@ -1,6 +1,9 @@
-//! Core HeeRanjID types.
+//! HeeRanjID is a Rust Snowflake-style distributed ID generator for database
+//! primary keys. It provides compact, sortable 64-bit `bigint` IDs ([`HeerId`])
+//! and UUIDv8-compatible 128-bit IDs ([`RanjId`]) for Postgres and MSSQL,
+//! with SQLx, Django, and cross-language ORM support.
 //!
-//! HeeRanjID is designed to let a project start on a single Postgres node with
+//! It is designed to let a project start on a single Postgres node with
 //! a compact 8-byte integer primary key, and migrate to distributed writers
 //! later without rewriting a single ID or schema. [`HeerId`] — a 64-bit
 //! time-ordered integer whose layout already carries a `node_id` field —
@@ -8,10 +11,11 @@
 //! many later is a config change (allocate more `node_id` values, bind each
 //! service's session); existing IDs stay valid.
 //!
-//! [`RanjId`] is the natural extension when `HeerId`'s capacity isn't enough
+//! [`RanjId`] is the natural extension when [`HeerId`]'s capacity isn't enough
 //! (more than 511 nodes, more than 8,191 IDs per node per millisecond, or
 //! sub-millisecond timestamp precision). It's a UUIDv8-compatible 128-bit
-//! identifier stored as `uuid`, and conversion from `HeerId` is lossless.
+//! identifier stored as `uuid` (Postgres) or `BINARY(16)` (MSSQL), and
+//! conversion from [`HeerId`] is lossless.
 //!
 //! [`HeerIdDesc`] and [`RanjIdDesc`] are reverse-chronologically-sorted
 //! siblings: their raw-bit ordering matches a `DESC` scan, so newest-first

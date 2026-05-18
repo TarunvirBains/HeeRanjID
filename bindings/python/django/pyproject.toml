@@ -4,21 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "heeranjid-django"
-version = "0.3.6"
-description = "Django integration for HeeRanjID distributed ID generation"
+version = "0.5.0"
+description = "Django ORM integration for HeeRanjID: Snowflake-style 64-bit and UUIDv8 128-bit distributed primary keys for Postgres and MSSQL."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 authors = [
     { name = "Tarunvir Bains" },
 ]
-keywords = ["django", "distributed", "id", "uuid", "heerid"]
+keywords = ["django", "snowflake", "uuid", "id-generator", "postgres", "mssql"]
 dependencies = [
     "heeranjid",
     "django>=4.2",
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
