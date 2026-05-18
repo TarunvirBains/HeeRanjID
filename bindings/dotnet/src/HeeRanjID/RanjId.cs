@@ -17,6 +17,48 @@ public readonly struct RanjId : IEquatable<RanjId>, IComparable<RanjId>, ICompar
 
     internal byte[] GetBytes() => _bytes;
 
+    /// <summary>
+    /// Returns a copy of the raw 16-byte big-endian representation.
+    /// This is the canonical BINARY(16) / MSSQL-safe wire format; it does NOT
+    /// apply the mixed-endian swizzle used by <see cref="ToGuid"/>.
+    /// </summary>
+    public byte[] ToBytes()
+    {
+        var copy = new byte[16];
+        Array.Copy(_bytes, copy, 16);
+        return copy;
+    }
+
+    /// <summary>
+    /// Constructs a <see cref="RanjId"/> directly from a 16-byte big-endian byte
+    /// array without any Guid-endian conversion.  This is the correct path for
+    /// SQL Server <c>BINARY(16)</c> columns, which store raw big-endian bytes.
+    /// </summary>
+    /// <param name="bigEndianBytes">
+    /// Exactly 16 bytes in RFC 4122 / big-endian byte order.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="bigEndianBytes"/> is not exactly 16 bytes.
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// Thrown when the bytes do not represent a valid RanjId (UUIDv8).
+    /// </exception>
+    public static RanjId FromBytes(byte[] bigEndianBytes)
+    {
+        if (bigEndianBytes is null || bigEndianBytes.Length != 16)
+            throw new ArgumentException("bigEndianBytes must be exactly 16 bytes.", nameof(bigEndianBytes));
+
+        // Validate via native decode to catch non-UUIDv8 inputs early.
+        var native = RanjIdBytes.FromArray(bigEndianBytes);
+        int rc = NativeMethods.RanjIdDecode(in native, out _, out _, out _);
+        if (rc != 0)
+            throw new FormatException($"Bytes do not represent a valid RanjId. {NativeMethods.GetLastError()}");
+
+        var copy = new byte[16];
+        Array.Copy(bigEndianBytes, copy, 16);
+        return new RanjId(copy);
+    }
+
     private RanjIdBytes ToNative() => RanjIdBytes.FromArray(_bytes);
 
     public ulong TimestampMicros

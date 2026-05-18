@@ -1,10 +1,10 @@
 {
   "name": "heeranjid-prisma",
-  "version": "0.1.0",
-  "description": "Prisma client extension for HeeRanjID distributed ID generation",
+  "version": "0.5.0",
+  "description": "Prisma client extension for HeeRanjID distributed ID generation (Postgres and MSSQL)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "scripts": {
     "build": "tsc",
     "prepack": "cp -r ../../../sql ./sql",

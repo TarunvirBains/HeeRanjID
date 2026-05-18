@@ -101,9 +101,11 @@ public static class HeeRanjIdDbContextExtensions
         {
             if (mssql)
             {
-                // MSSQL returns binary (varbinary); convert to Guid bytes then RanjId
+                // MSSQL returns BINARY(16) — raw big-endian bytes.  Use FromBytes
+                // directly to preserve sort order; routing through Guid would
+                // apply mixed-endian swizzle and corrupt the byte sequence.
                 var bytes = (byte[])reader.GetValue(0);
-                results.Add(RanjId.FromGuid(new Guid(bytes)));
+                results.Add(RanjId.FromBytes(bytes));
             }
             else
             {
