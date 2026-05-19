@@ -1,0 +1,11 @@
+{
+  "name": "heeranjid-workspace-root",
+  "private": true,
+  "version": "0.0.0",
+  "description": "npm workspaces root for HeeRanjID (Rust crate + TS bindings + Prisma extension). Not published; the `private: true` flag prevents an accidental `npm publish` from the repo root.",
+  "license": "MIT OR Apache-2.0",
+  "workspaces": [
+    "bindings/typescript",
+    "bindings/typescript/prisma"
+  ]
+}

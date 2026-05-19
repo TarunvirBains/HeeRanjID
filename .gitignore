@@ -2,3 +2,9 @@
 Cargo.lock
 .claude/
 .codex
+# npm workspaces hoisted dependencies — the workspace root package.json
+# declares `bindings/typescript` and `bindings/typescript/prisma` as
+# workspaces, so `npm install` populates ./node_modules with hoisted
+# deps. Per-workspace node_modules trees are already gitignored by
+# bindings/typescript/.gitignore (which covers both leaves).
+/node_modules

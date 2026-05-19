@@ -2,6 +2,7 @@
 extern crate napi_derive;
 
 use napi::bindgen_prelude::*;
+use uuid::Uuid;
 
 // ── HeerId wrapper ──────────────────────────────────────────────────
 
@@ -87,6 +88,68 @@ impl RanjId {
             .parse()
             .map_err(|e: heeranjid::Error| Error::from_reason(e.to_string()))?;
         Ok(Self { inner })
+    }
+
+    /// Create a RanjId from a 16-byte big-endian buffer.
+    ///
+    /// This is the canonical BINARY(16) / MSSQL-safe wire format; it does NOT
+    /// apply any mixed-endian swizzle. The bytes are validated to encode a
+    /// well-formed UUIDv8 (RFC 4122 variant) via the heeranjid core decoder.
+    ///
+    /// Throws if the buffer is not exactly 16 bytes or if the bytes do not
+    /// encode a valid UUIDv8 RanjId.
+    ///
+    /// Accepts both a Node `Buffer` and a bare `Uint8Array` (Buffer is a
+    /// Uint8Array subclass). The wider `Uint8Array` parameter type is
+    /// required to match Prisma 6+'s `Bytes` field shape: `@prisma/client`
+    /// >= 6 returns a bare `Uint8Array` from the sqlserver adapter for
+    /// `BINARY(16)` columns, and napi-rs's `Buffer` `FromNapiValue` impl
+    /// rejects bare `Uint8Array` with "Expected a Buffer value". The
+    /// underlying byte layout is identical for both, so callers passing a
+    /// `Buffer` continue to work unchanged.
+    #[napi(factory)]
+    pub fn from_bytes(bytes: Uint8Array) -> Result<Self> {
+        let slice: &[u8] = bytes.as_ref();
+        if slice.len() != 16 {
+            return Err(Error::from_reason(format!(
+                "bytes must be exactly 16 bytes, got {}",
+                slice.len()
+            )));
+        }
+        // `Uuid::from_slice` copies the 16 bytes into an owned `[u8; 16]`,
+        // and `RanjId` stores the `Uuid` by value. The caller's buffer is
+        // never aliased after this call, so mutating it later cannot
+        // corrupt the constructed RanjId.
+        let uuid = Uuid::from_slice(slice)
+            .map_err(|e| Error::from_reason(format!("invalid uuid bytes: {e}")))?;
+        let inner = heeranjid::RanjId::from_uuid(uuid)
+            .map_err(|e: heeranjid::Error| Error::from_reason(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    /// Return a copy of the raw 16-byte big-endian representation.
+    ///
+    /// This is the canonical BINARY(16) / MSSQL-safe wire format; it does NOT
+    /// apply the mixed-endian swizzle used by `toUuid` / Guid round-tripping.
+    /// Each call returns a fresh allocation, so the returned array is safe
+    /// to mutate without affecting the RanjId.
+    ///
+    /// Returns a `Uint8Array` for symmetry with `fromBytes` (which accepts
+    /// the same JS type) and to match the runtime shape Prisma 6+ surfaces
+    /// for `Bytes` / `BINARY(16)` columns on the sqlserver adapter — letting
+    /// callers feed the result straight back into `prisma.model.create({
+    /// data: { id: ranjId.toBytes() } })` without an intermediate conversion.
+    /// If a caller needs `Buffer`-specific accessors (`readUInt8`,
+    /// `toString("hex")`, etc.), wrapping with `Buffer.from(result)` is a
+    /// zero-copy view because `Buffer` is a `Uint8Array` subclass on Node.
+    #[napi]
+    pub fn to_bytes(&self) -> Uint8Array {
+        // `as_uuid()` is by-value (Uuid: Copy); bind it so `into_bytes()` has
+        // a place to borrow from. The resulting `Vec<u8>` is moved into the
+        // `Uint8Array`, which owns the allocation and is finalized
+        // independently of any borrowed view the JS side keeps alive.
+        let uuid: Uuid = self.inner.as_uuid();
+        Uint8Array::from(uuid.into_bytes().to_vec())
     }
 
     /// Return the UUID string representation.

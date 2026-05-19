@@ -2,9 +2,12 @@
   "name": "heeranjid",
   "version": "0.5.0",
   "description": "Snowflake-style distributed ID generator for Postgres and MSSQL: HeerId (64-bit bigint) and RanjId (128-bit UUIDv8)",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "index.js",
+  "types": "index.d.ts",
   "license": "MIT OR Apache-2.0",
+  "engines": {
+    "node": ">=20.19"
+  },
   "napi": {
     "name": "heeranjid",
     "triples": {
@@ -14,14 +17,19 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "prepack": "cp -r ../../sql ./sql",
+    "prepack": "npm run build && cp -r ../../sql ./sql",
     "postpack": "rm -rf ./sql",
     "test": "vitest run"
   },
-  "files": ["dist/", "js/", "sql/", "index.js", "index.d.ts"],
+  "files": [
+    "js/",
+    "sql/",
+    "index.js",
+    "index.d.ts"
+  ],
   "devDependencies": {
-    "@napi-rs/cli": "^2",
-    "vitest": "^2",
-    "typescript": "^5"
+    "@napi-rs/cli": "^3.6.2",
+    "typescript": "^5",
+    "vitest": "^2"
   }
 }

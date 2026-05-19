@@ -4,30 +4,37 @@
   "description": "Prisma client extension for HeeRanjID distributed ID generation (Postgres and MSSQL)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "license": "MIT OR Apache-2.0",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "build": "tsc",
-    "prepack": "cp -r ../../../sql ./sql",
+    "prepack": "npm run build && cp -r ../../../sql ./sql",
     "postpack": "rm -rf ./sql",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "files": [
     "dist/",
     "src/",
     "sql/"
   ],
-  "dependencies": {
-    "heeranjid": "file:../"
-  },
   "peerDependencies": {
-    "@prisma/client": ">=5.0.0"
+    "@prisma/client": "^6.0.0 || ^7.0.0",
+    "heeranjid": "^0.5.0"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
       "optional": false
+    },
+    "heeranjid": {
+      "optional": false
     }
   },
   "devDependencies": {
+    "@types/node": "^20",
     "typescript": "^5",
     "vitest": "^2"
   }

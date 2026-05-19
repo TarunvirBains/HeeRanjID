@@ -50,7 +50,12 @@ jobs:
       - name: Set up Node.js for N-API build
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Pinned to the floor declared by `engines.node` in
+          # bindings/typescript/package.json (the package this step
+          # installs and builds via `napi build`). A lower minor would
+          # raise `EBADENGINE` on `npm install` and skip Node 20+-only
+          # behavior the package depends on.
+          node-version: "20.19"
 
       - name: Install build tools
         run: |
@@ -412,7 +417,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          # Must satisfy `engines.node >=20.19` declared in
+          # bindings/typescript/package.json and
+          # bindings/typescript/prisma/package.json. Anything older raises
+          # `EBADENGINE` on npm install and skips real Node 20+ behavior
+          # (e.g. `import.meta.url` interop) that the prisma extension relies on.
+          node-version: "20.19"
 
       - name: Download native module
         uses: actions/download-artifact@v4
@@ -426,10 +436,29 @@ jobs:
           npm install
           npm test
 
-      - name: Install and test Prisma extension
+      - name: Install Prisma extension
         run: |
           cd bindings/typescript/prisma
           npm install
+
+      # The `@ts-expect-error` regression guards in
+      # bindings/typescript/prisma/tests/prisma.test.ts only have teeth if
+      # something actually runs `tsc` over the tests. Vitest uses esbuild
+      # which does NOT enforce TypeScript types, so without this step a
+      # future refactor that relaxed (e.g.) `WithAutoIdsConfig.backend`
+      # back to optional would leave the runtime test passing while the
+      # contract silently regressed. `npm run typecheck:tests` invokes
+      # `tsc -p tsconfig.test.json` which compiles both src/**/*.ts and
+      # tests/**/*.ts with `strict: true`, surfacing TS2578 ("Unused
+      # '@ts-expect-error' directive") on contract regressions.
+      - name: Typecheck Prisma extension tests
+        run: |
+          cd bindings/typescript/prisma
+          npm run typecheck:tests
+
+      - name: Test Prisma extension
+        run: |
+          cd bindings/typescript/prisma
           npm test
 
   dotnet-windows:
