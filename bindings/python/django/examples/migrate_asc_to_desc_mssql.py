@@ -67,12 +67,36 @@ def seed_rows(cur, table, count):
         cur.execute(f"INSERT INTO {table} (id) VALUES (?)", [raw])
 
 
+def _validate_identifier_part(value):
+    if not value or not isinstance(value, str):
+        raise ValueError("Identifier must be a non-empty string")
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+    if any(ch not in allowed for ch in value):
+        raise ValueError(f"Unsafe SQL identifier: {value!r}")
+    return value
+
+
+def _quote_ident(value):
+    _validate_identifier_part(value)
+    return "[" + value.replace("]", "]]") + "]"
+
+
+def _quote_qualified_name(name):
+    parts = name.split(".")
+    if len(parts) > 2:
+        raise ValueError(f"Unsupported qualified name: {name!r}")
+    return ".".join(_quote_ident(part) for part in parts)
+
+
 def run_migration(cur, table):
     src_col = "id"
     dst_col = "id_new"
+    q_table = _quote_qualified_name(table)
+    q_src_col = _quote_ident(src_col)
+    q_dst_col = _quote_ident(dst_col)
 
     print(f"→ [1/6] ADD COLUMN {dst_col} bigint NULL")
-    cur.execute(f"ALTER TABLE {table} ADD {dst_col} bigint NULL")
+    cur.execute(f"ALTER TABLE {q_table} ADD {q_dst_col} bigint NULL")
 
     print("→ [2/6] Install autofill trigger")
     trig_sql = mssql_schema.mssql_install_autofill_trigger_for_table(
@@ -92,22 +116,24 @@ def run_migration(cur, table):
 
     print("→ [4/6] ALTER COLUMN NOT NULL")
     cur.execute(
-        f"ALTER TABLE {table} ALTER COLUMN {dst_col} bigint NOT NULL"
+        f"ALTER TABLE {q_table} ALTER COLUMN {q_dst_col} bigint NOT NULL"
     )
 
     print("→ [5/6] Cutover: drop old PK, rename, add new PK")
     # Find PK name dynamically
     cur.execute(
-        f"SELECT name FROM sys.key_constraints "
-        f"WHERE parent_object_id = OBJECT_ID('{table}') AND type = 'PK'"
+        "SELECT name FROM sys.key_constraints "
+        "WHERE parent_object_id = OBJECT_ID(?) AND type = 'PK'",
+        [table],
     )
     (pk_name,) = cur.fetchone()
-    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT {pk_name}")
-    cur.execute(f"ALTER TABLE {table} DROP COLUMN {src_col}")
+    q_pk_name = _quote_ident(pk_name)
+    cur.execute(f"ALTER TABLE {q_table} DROP CONSTRAINT {q_pk_name}")
+    cur.execute(f"ALTER TABLE {q_table} DROP COLUMN {q_src_col}")
     cur.execute(
         f"EXEC sp_rename '{table}.{dst_col}', '{src_col}', 'COLUMN'"
     )
-    cur.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({src_col})")
+    cur.execute(f"ALTER TABLE {q_table} ADD PRIMARY KEY ({q_src_col})")
 
     print("→ [6/6] Drop autofill trigger (stale after rename)")
     drop_sql = mssql_schema.mssql_drop_autofill_trigger_for_table(table)
