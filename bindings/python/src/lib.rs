@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-#[pyclass(frozen, eq, ord, hash)]
+#[pyclass(frozen, eq, ord, hash, from_py_object)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HeerId {
     inner: heeranjid::HeerId,
@@ -68,7 +68,7 @@ impl HeerId {
     }
 }
 
-#[pyclass(frozen, eq, ord, hash)]
+#[pyclass(frozen, eq, ord, hash, from_py_object)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RanjId {
     inner: heeranjid::RanjId,
@@ -146,7 +146,7 @@ impl RanjId {
     }
 }
 
-#[pyclass(frozen, eq, ord, hash)]
+#[pyclass(frozen, eq, ord, hash, from_py_object)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HeerIdDesc {
     inner: heeranjid::HeerIdDesc,
@@ -204,7 +204,7 @@ impl HeerIdDesc {
     }
 }
 
-#[pyclass(frozen, eq, ord, hash)]
+#[pyclass(frozen, eq, ord, hash, from_py_object)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RanjIdDesc {
     inner: heeranjid::RanjIdDesc,

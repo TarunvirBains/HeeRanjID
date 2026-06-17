@@ -11,5 +11,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 heeranjid = { path = "../../heeranjid", default-features = false }
-pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3 = { version = "0.29", features = ["extension-module"] }
 uuid = "1"
