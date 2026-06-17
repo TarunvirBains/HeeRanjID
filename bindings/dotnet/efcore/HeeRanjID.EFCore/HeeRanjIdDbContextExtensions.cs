@@ -53,9 +53,38 @@ public static class HeeRanjIdDbContextExtensions
         if (context.Database.CurrentTransaction != null)
             cmd.Transaction = context.Database.CurrentTransaction.GetDbTransaction();
 
-        cmd.CommandText = IsMssql(context)
-            ? $"EXEC generate_ids @in_node_id = {nodeId}, @requested_count = {count}"
-            : $"SELECT id FROM generate_ids({nodeId}, {count})";
+        if (IsMssql(context))
+        {
+            cmd.CommandText = "EXEC generate_ids @in_node_id = @in_node_id, @requested_count = @requested_count";
+
+            var nodeParam = cmd.CreateParameter();
+            nodeParam.ParameterName = "@in_node_id";
+            nodeParam.DbType = DbType.Int32;
+            nodeParam.Value = nodeId;
+            cmd.Parameters.Add(nodeParam);
+
+            var countParam = cmd.CreateParameter();
+            countParam.ParameterName = "@requested_count";
+            countParam.DbType = DbType.Int32;
+            countParam.Value = count;
+            cmd.Parameters.Add(countParam);
+        }
+        else
+        {
+            cmd.CommandText = "SELECT id FROM generate_ids(@p_node_id, @p_count)";
+
+            var nodeParam = cmd.CreateParameter();
+            nodeParam.ParameterName = "@p_node_id";
+            nodeParam.DbType = DbType.Int32;
+            nodeParam.Value = nodeId;
+            cmd.Parameters.Add(nodeParam);
+
+            var countParam = cmd.CreateParameter();
+            countParam.ParameterName = "@p_count";
+            countParam.DbType = DbType.Int32;
+            countParam.Value = count;
+            cmd.Parameters.Add(countParam);
+        }
 
         var results = new List<HeerId>(count);
         using var reader = await cmd.ExecuteReaderAsync(ct);

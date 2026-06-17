@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
     // Generate C header bindings
@@ -15,7 +15,10 @@ fn main() {
         let sql_dest = Path::new(&out_dir).join("sql");
 
         if sql_src.exists() {
-            copy_dir_recursive(&sql_src, &sql_dest)
+            let sql_src_canonical = sql_src
+                .canonicalize()
+                .expect("Failed to canonicalize SQL source directory");
+            copy_dir_recursive(&sql_src_canonical, &sql_src_canonical, &sql_dest)
                 .expect("Failed to copy SQL files to output directory");
             println!("cargo:warning=SQL files copied to {}", sql_dest.display());
         } else {
@@ -30,20 +33,35 @@ fn main() {
     println!("cargo:rerun-if-changed=../sql");
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+fn copy_dir_recursive(src_root: &Path, src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let path = entry.path();
+        let metadata = std::fs::symlink_metadata(&path)?;
+
+        // Do not follow symlinks to avoid escaping the trusted source tree.
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+
+        let canonical_path: PathBuf = path.canonicalize()?;
+        if !canonical_path.starts_with(src_root) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Path escapes SQL source directory: {}", canonical_path.display()),
+            ));
+        }
+
         let dest_path = dst.join(entry.file_name());
-        if path.is_dir() {
+        if canonical_path.is_dir() {
             // Skip .git directories inside the submodule
             if entry.file_name() == ".git" {
                 continue;
             }
-            copy_dir_recursive(&path, &dest_path)?;
+            copy_dir_recursive(src_root, &canonical_path, &dest_path)?;
         } else {
-            std::fs::copy(&path, &dest_path)?;
+            std::fs::copy(&canonical_path, &dest_path)?;
         }
     }
     Ok(())
