@@ -242,7 +242,14 @@ pub fn run(list_only: bool) -> ExitCode {
 // ---------------------------------------------------------------------------
 
 fn collect_active_rs_files(root: &Path, dir: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(dir)? {
+    let canonical_root = fs::canonicalize(root)?;
+    let canonical_dir = fs::canonicalize(dir)?;
+
+    if !canonical_dir.starts_with(&canonical_root) {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(&canonical_dir)? {
         let entry = entry?;
         let path = entry.path();
         let file_type = entry.file_type()?;
@@ -254,10 +261,16 @@ fn collect_active_rs_files(root: &Path, dir: &Path, files: &mut Vec<PathBuf>) ->
             {
                 continue;
             }
-            collect_active_rs_files(root, &path, files)?;
+
+            let canonical_child = fs::canonicalize(&path)?;
+            if !canonical_child.starts_with(&canonical_root) {
+                continue;
+            }
+
+            collect_active_rs_files(&canonical_root, &canonical_child, files)?;
         } else if file_type.is_file()
             && path.extension().is_some_and(|ext| ext == "rs")
-            && is_active_rust_surface(root, &path)
+            && is_active_rust_surface(&canonical_root, &path)
         {
             files.push(path);
         }
