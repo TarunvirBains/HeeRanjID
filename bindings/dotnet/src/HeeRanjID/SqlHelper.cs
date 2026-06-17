@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 
 namespace HeeRanjID;
@@ -53,9 +54,20 @@ public static class SqlHelper
         return ReadFile(backend, Path.Combine(subdir, "session.sql"));
     }
 
+    private static string NormalizeBackend(string backend)
+    {
+        if (string.Equals(backend, "postgres", StringComparison.OrdinalIgnoreCase))
+            return "postgres";
+        if (string.Equals(backend, "mssql", StringComparison.OrdinalIgnoreCase))
+            return "mssql";
+
+        throw new ArgumentException("Unsupported backend. Allowed values are 'postgres' or 'mssql'.", nameof(backend));
+    }
+
     private static string ReadFile(string backend, string relativePath)
     {
-        var path = Path.Combine(SqlBasePath, backend, relativePath);
+        var normalizedBackend = NormalizeBackend(backend);
+        var path = Path.Combine(SqlBasePath, normalizedBackend, relativePath);
         if (!File.Exists(path))
             throw new FileNotFoundException(
                 $"SQL file not found: {path}. Ensure SQL files are available " +
